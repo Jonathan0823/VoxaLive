@@ -58,29 +58,33 @@ graph TB
         A -.->|"Binary chunks"| E
         B -.->|"JSON text"| E
         C -.->|"Comments"| E
-        D -.->|"Live events"| E
+        D -.->|"Live events / Comments"| E
     end
     
     E["mpsc::channel(100)<br/>tokio::sync"]
     
     subgraph Pipeline ["AI Pipeline"]
         E --> F{Input Type?}
-        F -->|Audio| G["faster-whisper-rs<br/>STT 150ms<br/>GPU/CPU"]
-        F -->|Text/Comments| H[Passthrough]
+        
+        %% Path for Audio
+        F -->|Audio| G["faster-whisper-rs<br/>STT 150ms"]
+        
+        %% Path for Text directly to Providers
+        F -->|Text/Comments| I
         G --> I{LLM Provider?}
-        H --> I
         
-        I -->|Gemini| Ig["Gemini 2.0 Flash<br/>200ms Free API"]
-        I -->|OpenRouter| Io["300+ Models<br/>Claude/Grok/etc<br/>150-500ms"]
-        I -->|Ollama| Il["Local GPU/CPU<br/>llama3.2/qwen2<br/>500ms-2s"]
+        I -->|Gemini| Ig["Gemini 2.0 Flash"]
+        I -->|OpenRouter| Io["Claude/Grok/etc"]
+        I -->|Ollama| Il["Local llama3.2"]
         
-        Ig --> J
-        Io --> J
-        Il --> J
+        %% Immediate transition to TTS Mode
+        Ig --> K
+        Io --> K
+        Il --> K
         
-        J --> K{TTS Mode?}
-        K -->|GPU| Kg["Qwen3-TTS<br/>97ms Custom Clone"]
-        K -->|CPU Fallback| Kc["Piper TTS<br/>250ms 50MB ONNX"]
+        K{TTS Mode?}
+        K -->|GPU| Kg["Qwen3-TTS<br/>Clone"]
+        K -->|CPU Fallback| Kc["Piper TTS<br/>ONNX"]
     end
     
     Kg --> L
@@ -88,11 +92,10 @@ graph TB
     
     subgraph Frontends ["Frontends"]
         L{Frontend?}
-        L -->|VTS| M["VTube Studio<br/>ws://localhost:8001<br/>Live2D Lip-sync<br/>OBS Ready"]
-        L -->|Web3D| N["Three.js + VRM<br/>Browser PWA<br/>Morph Targets<br/>Ready Player Me"]
-        L -->|Raw API| O["Custom Clients<br/>JSON + Binary<br/>Flutter/Tauri/etc"]
+        L -->|VTS| M["VTube Studio<br/>Lip-sync"]
+        L -->|Web3D| N["Three.js + VRM<br/>Morph Targets"]
+        L -->|Raw API| O["Custom Clients<br/>Flutter/Tauri"]
     end
-
 ```
 
 ## ⚡ Quick Start (5 Minutes)
