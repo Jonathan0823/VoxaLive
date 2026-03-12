@@ -1,4 +1,4 @@
-# VoiceAI Realtime - Complete Project README (Rust Multi-LLM Edition)
+# VoiceAI Realtime
 
 ## 🎯 Overview
 
