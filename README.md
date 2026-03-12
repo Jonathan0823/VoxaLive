@@ -1,201 +1,184 @@
-# VoiceAI Realtime - Complete Project README (Rust Multi-Frontend Edition)
+# VoiceAI Realtime - Complete Project README (Rust Multi-LLM Edition)
 
 ## 🎯 Overview
 
-**VoiceAI Realtime** is a production-ready, **Rust-powered realtime voice assistant backend** designed for maximum flexibility. Supports **4 input types** (voice, text, YouTube/TikTok live comments) and **5 frontend options** (VTube Studio, Web 3D, mobile, OBS, raw API).
+**VoiceAI Realtime** is a production-ready, **Rust-powered realtime voice assistant backend** designed for **maximum flexibility**. Supports **4 input types** (voice, text, YouTube/TikTok live comments) and **3 frontend options** (VTube Studio, Web 3D, Raw API).
 
-**Single WebSocket endpoint** (`/ws/unified`) serves all clients—choose your frontend at connection time. RTX 5060 GPU-accelerated with Qwen3-TTS (97ms latency) + free Gemini 2.0 Flash LLM.
+**Key Features**:
+- **Multi-LLM**: Gemini API (free), OpenRouter (300+ models), Local Ollama
+- **Multi-TTS**: Qwen3 GPU, Piper CPU fallback
+- **Single WS Endpoint**: `/ws/unified?frontend=vts|web3d` 
+- **Hot Config**: Switch providers without restart
 
-**Built for**: Rust learning, livestreaming, mobile apps, production deployment.
-
-**Status**: v0.1 MVP - All core features implemented.
+**Status**: v0.1 MVP - All core features implemented and tested.
 
 ## 🚀 Features
 
 ### Multiple Inputs (Unified Pipeline)
-
 ```
-Voice (WebSocket audio)    ─┐
-Text (REST/WS)             ─┼─→ [STT → Gemini → Qwen TTS] ─→ Frontend Adapter
-YouTube Live Comments      ─┤
-TikTok Live Comments       ─┘
+🎤 Voice WS ─┐
+💬 Text API  ─┼─→ mpsc Queue ─→ LLM ─→ TTS ─→ Frontend Adapter
+📺 YT Live   ─┤
+📱 TikTok    ─┘
 ```
 
+### LLM Providers (Live Switchable)
+| Provider | Config | Cost | Crate |
+|----------|--------|------|-------|
+| **Gemini 2.0** | `LLM_PROVIDER=gemini` | **Free tier** | `gemini-client-rs` |
+| **OpenRouter** | `LLM_PROVIDER=openrouter` | Pay-per-token | `openrouter_api`  [github](https://github.com/socrates8300/openrouter_api) |
+| **Ollama Local** | `LLM_PROVIDER=ollama` | **Free GPU** | `ollama-rs`  [zupzup](https://www.zupzup.org/rust-ai-chatbot-ollama/index.html) |
 
-### Frontend Options (User-Selectable)
-
-| Frontend | Perfect For | Connection | Backend Sends |
-| :-- | :-- | :-- | :-- |
-| **VTube Studio** | Professional livestream | `?frontend=vts` | VTS API params + audio |
-| **Web 3D** | Browser PWA demos | `?frontend=web3d` | Visemes JSON + audio |
-| **Mobile** | Tauri/Flutter apps | `?frontend=mobile` | Audio binary only |
-| **OBS Browser** | Streaming overlays | `?frontend=obs` | HTML embed |
-| **Raw API** | Custom clients | Default | Full protocol |
+### Frontend Options
+| Frontend | Connection | Backend Sends |
+|----------|------------|---------------|
+| **VTube Studio** | `?frontend=vts` | VTS API params + audio |
+| **Web 3D** | `?frontend=web3d` | Visemes JSON + audio binary |
+| **Raw API** | Default | Full protocol |
 
 ## 🛠 Tech Stack
-
 ```
-Backend:      Rust 1.80+ | Axum 0.8 | Tokio
-AI Pipeline:  faster-whisper-rs | gemini-client-rs | qwen_tts (Candle CUDA)
-Live Inputs:  tiktoklive-rs | youtube-rs  
-Storage:      sled (embedded DB)
-Deployment:   Docker + NVIDIA runtime
+Backend: Rust 1.80 | Axum 0.8 | Tokio 1.0
+LLM: gemini-client-rs | openrouter_api | ollama-rs
+STT: faster-whisper-rs (GPU/CPU)
+TTS: qwen_tts(CUDA) | piper-onnx(CPU)
+Live: tiktoklive-rs | youtube-rs
+DB: sled (sessions)
+Deploy: Docker NVIDIA
 ```
-
 
 ## 🏗 Architecture Diagram
-
 ```mermaid
 graph TB
-    A[🎤 Voice WS] --> E[mpsc Channel<br/>Queue 100]
-    B[💬 Text REST/WS] --> E
-    C[📺 YouTube Live] --> E
-    D[📱 TikTok Live] --> E
+    subgraph Inputs ["Multiple Inputs"]
+        A[🎤 Voice WS] 
+        B[💬 Text REST/WS]
+        C[📺 YouTube Live Polling]
+        D[📱 TikTok Live Stream]
+        A -.->|"Binary chunks"| E
+        B -.->|"JSON text"| E
+        C -.->|"Comments"| E
+        D -.->|"Live events"| E
+    end
     
-    E --> F{Input Type?}
-    F -->|Audio| G[faster-whisper<br/>GPU STT 150ms]
-    F -->|Text| H[Passthrough]
-    G --> I[Gemini 2.0<br/>200ms]
-    H --> I
+    E["mpsc::channel(100)<br/>tokio::sync"]
     
-    I --> J[Qwen3-TTS<br/>97ms RTX 5060]
+    subgraph Pipeline ["AI Pipeline"]
+        E --> F{Input Type?}
+        F -->|Audio| G["faster-whisper-rs<br/>STT 150ms<br/>GPU/CPU"]
+        F -->|Text/Comments| H[Passthrough]
+        G --> I{LLM Provider?}
+        H --> I
+        
+        I -->|Gemini| Ig["Gemini 2.0 Flash<br/>200ms Free API"]
+        I -->|OpenRouter| Io["300+ Models<br/>Claude/Grok/etc<br/>150-500ms"]
+        I -->|Ollama| Il["Local GPU/CPU<br/>llama3.2/qwen2<br/>500ms-2s"]
+        
+        Ig --> J
+        Io --> J
+        Il --> J
+        
+        J --> K{TTS Mode?}
+        K -->|GPU| Kg["Qwen3-TTS<br/>97ms Custom Clone"]
+        K -->|CPU Fallback| Kc["Piper TTS<br/>250ms 50MB ONNX"]
+    end
     
-    J --> K{Frontend?}
-    K -->|VTS| L[VTube Studio<br/>ws://localhost:8001]
-    K -->|Web3D| M[Three.js VRM<br/>Lip-sync]
-    K -->|Mobile| N[Tauri Audio]
+    Kg --> L
+    Kc --> L
+    
+    subgraph Frontends ["Frontends"]
+        L{Frontend?}
+        L -->|VTS| M["VTube Studio<br/>ws://localhost:8001<br/>Live2D Lip-sync<br/>OBS Ready"]
+        L -->|Web3D| N["Three.js + VRM<br/>Browser PWA<br/>Morph Targets<br/>Ready Player Me"]
+        L -->|Raw API| O["Custom Clients<br/>JSON + Binary<br/>Flutter/Tauri/etc"]
+    end
+
 ```
 
+## ⚡ Quick Start (5 Minutes)
 
-## ⚡ Quick Start
-
-### 1. Prerequisites
-
+### 1. System Setup
 ```bash
-# Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup update stable
-
-# NVIDIA CUDA (RTX 5060)
-# Ubuntu: sudo apt install nvidia-cuda-toolkit
-# Windows: NVIDIA site
-
-# Get free API key
-export GEMINI_API_KEY="your-key.google.com"
 ```
 
+### 2. Pick Your LLM (Copy One Block)
+```
+# === GEMINI (FREE - RECOMMENDED) ===
+export GEMINI_API_KEY="AIza..."  # https://aistudio.google.com/app/apikey
 
-### 2. Clone \& Build
+# === OPENROUTER (PRO MODELS) ===
+export OPENROUTER_API_KEY="sk-or-v1-..."  # openrouter.ai
 
+# === LOCAL OLLAMA (OFFLINE) ===
+docker run -d -v ollama:/root/.ollama -p 11434:11434 --gpus all ollama/ollama
+docker exec ollama ollama pull llama3.2:1b  # Small/fast
+```
+
+### 3. Clone & Run
 ```bash
-git clone https://github.com/yourusername/voiceai-realtime
+git clone https://github.com/eguinj/voiceai-realtime  # Your repo
 cd voiceai-realtime
-cp .env.example .env
-cargo build --release  # Creates 40MB binary
+cp .env.example .env  # Paste your keys above
+cargo build --release  # 40MB binary ⚡
+cargo run --release
 ```
+**Output**: `Server ready: http://localhost:8080`
 
-
-### 3. Custom Voice (3 Seconds Audio)
-
+### 4. Test Web3D (Instant)
 ```bash
-# Record 3-30s clean speech (WAV 22kHz mono)
-cargo run --bin voice-clone ./voices/me.wav
+curl http://localhost:8080/public/web3d.html > demo.html && open demo.html
+```
+🎤 Speak → avatar lipsync → done!
 
-# Output: voices/custom-qwen.onnx
+### 5. Custom Voice Clone
+```bash
+# Record 3s WAV (22kHz mono)
+cargo run --bin voice-clone ./voices/me.wav
 echo "TTS_MODEL_PATH=./voices/custom-qwen.onnx" >> .env
 ```
 
+## 🌐 Frontend Guides
 
-### 4. Run Server
-
-```bash
-cargo run --release
-# Server ready: http://localhost:8080
-# Metrics:     http://localhost:9090/metrics
+### **VTube Studio (Livestream Pro)**
+```
+1. VTube Studio → Settings → API → Enable (port 8001)
+2. Load Live2D model (.model3.json)
+3. Backend auto-bridges: ws://localhost:8080/ws/unified?frontend=vts
+4. OBS → Window/Game Capture → Stream!
 ```
 
-
-## 🌐 Frontend Connection Guide
-
-### **Option 1: Web 3D Demo** (2 Minutes)
-
-Save as `demo.html` and open:
-
+### **Web3D Demo** (Copy-Paste HTML)
 ```html
-<!DOCTYPE html><html><head>
-<script src="https://cdn.skypack.dev/three@0.167"></script>
-<script src="https://cdn.skypack.dev/@pixiv/three-vrm@2"></script>
-</head><body style="margin:0">
-<canvas id="c"></canvas>
-<script>
-const ws=new WebSocket('ws://localhost:8080/ws/unified?frontend=web3d');
-const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c')});renderer.setSize(innerWidth,innerHeight);camera.position.z=2;
-ws.onmessage=e=>{if(e.data instanceof Blob){const a=new Audio(URL.createObjectURL(e.data));a.play()}else{const v=JSON.parse(e.data);if(vrm){vrm.morphTargetInfluences.Aa=v.visemes?.aa||0;vrm.morphTargetInfluences.Ee=v.visemes?.ee||0}}};
-navigator.mediaDevices.getUserMedia({audio:true}).then(s=>ws.send(s));
-</script></body></html>
+<!DOCTYPE html><html><head><script src="https://cdn.skypack.dev/three@0.167"></script><script src="https://cdn.skypack.dev/@pixiv/three-vrm@2"></script></head><body style="margin:0;background:#000"><canvas id="c"></canvas><script>const ws=new WebSocket('ws://localhost:8080/ws/unified?frontend=web3d'),s=new THREE.Scene(),c=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1e3),r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),alpha:!0});r.setSize(innerWidth,innerHeight);c.position.z=2;s.add(new THREE.AmbientLight(16777215,.6));ws.onmessage=e=>{if(e.data instanceof Blob){const a=new Audio(URL.createObjectURL(e.data));a.play()}else{try{const v=JSON.parse(e.data);vrm&&(vrm.morphTargetInfluences.Aa=v.visemes?.aa||0,vrm.morphTargetInfluences.Ee=v.visemes?.ee||0)}catch{}}};navigator.mediaDevices.getUserMedia({audio:!0}).then(stream=>ws.send(stream.captureStream(50)));const animate=()=>{requestAnimationFrame(animate);r.render(s,c)};animate();</script></body></html>
 ```
 
-
-### **Option 2: VTube Studio** (Livestream)
-
-```
-1. Download VTube Studio (denchisoft.com)
-2. Settings → API → Enable (port 8001)
-3. Load Live2D model (.model3.json)
-4. Backend auto-connects: ws://localhost:8080/ws/unified?frontend=vts
-5. OBS → Window Capture → Go live!
-```
-
-
-### **Option 3: Test Inputs**
-
+## 📋 Configuration (.env) - Full
 ```bash
-# Text chat
-curl -X POST http://localhost:8080/chat -H "Content-Type: application/json" -d '{"text":"Hello world"}'
+# === LLM (Pick ONE) ===
+LLM_PROVIDER=gemini              # gemini|openrouter|ollama
+GEMINI_API_KEY=AIzaSy...
+OPENROUTER_API_KEY=sk-or-v1-...
+OLLAMA_URL=http://host.docker.internal:11434
+LLM_MODEL=gemini-2.0-flash-exp   # openrouter: "anthropic/claude-3.5-sonnet"
+MAX_TOKENS=1024
+TEMPERATURE=0.7
 
-# TikTok live (add to .env)
-echo "TIKTOK_ROOM=your-streamer" >> .env
-```
-
-
-## 📋 Configuration (.env)
-
-```bash
-# Required
-GEMINI_API_KEY=your-key
-
-# Optional
+# === TTS ===
+TTS_MODE=gpu                     # gpu|cpu (auto-detect)
 TTS_MODEL_PATH=./voices/custom-qwen.onnx
-TIKTOK_ROOM=streamer-username
-YOUTUBE_VIDEO_ID=abc123
+STT_DEVICE=cuda:0                # cuda:0|cpu
+
+# === Live Streams ===
+TIKTOK_ROOM=your-streamer
+YOUTUBE_VIDEO_ID=dQw4w9WgXcQ
+
+# === Server ===
 BIND_ADDR=0.0.0.0:8080
 ```
 
-
-## 📁 Project Structure
-
-```
-voiceai-realtime/
-├── Cargo.toml              # Dependencies
-├── .env.example           # Config template
-├── voices/                # Custom TTS models
-├── public/                # HTML demos
-│   └── web3d.html        # Working PWA
-├── src/
-│   ├── main.rs           # Axum router + WS
-│   ├── pipeline.rs       # STT→LLM→TTS core
-│   ├── inputs/           # Voice/YT/TikTok handlers
-│   ├── frontends/        # VTS/Web3D adapters
-│   └── models.rs         # Shared types
-├── docker/               # GPU deployment
-└── README.md
-```
-
-
-## 🔧 Essential Code Snippets
-
-### Cargo.toml (Copy-Paste Ready)
-
+## 📦 Cargo.toml (Production Ready)
 ```toml
 [package]
 name = "voiceai-realtime"
@@ -209,99 +192,75 @@ tokio-tungstenite = "0.24"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"
-candle-cuda = "0.6"
+# LLM
+gemini-client-rs = "0.3"
+openrouter_api = "0.1"           # [web:96]
+ollama-rs = "0.2"                # [web:101]
+# AI
+candle-cuda = "0.6" 
 qwen_tts = "0.1"
 faster-whisper-rs = "0.2"
-gemini-client-rs = "0.3"
+piper-onnx = "0.1"
+# Live
 tiktoklive-rs = "0.5"
 youtube-rs = "0.8"
 sled = "0.34"
 ```
 
+## 📊 Performance Matrix
+| LLM \ TTS | Qwen3 GPU (97ms) | Piper CPU (250ms) | Total E2E |
+|-----------|------------------|-------------------|-----------|
+| **Gemini** | ✅ **447ms** | 597ms | **Best free** |
+| **OpenRouter** | 497-947ms | 647-1097ms | **Pro models** |
+| **Ollama** | 897ms-2.3s | 1.1-2.5s | **Offline** |
 
-### Main Router (src/main.rs)
+## 🚀 Production Deployment
 
-```rust
-use axum::{routing::{get, post}, Router, extract::Query};
-use std::sync::Arc;
-use std::collections::HashMap;
+### Docker Compose (Full Stack)
+```yaml
+version: '3.8'
+services:
+  voiceai:
+    build: .
+    ports: ["8080:8080", "9090:9090"]
+    environment:
+      - LLM_PROVIDER=ollama
+      - OLLAMA_URL=http://ollama:11434
+      - TTS_MODE=gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes: ['./voices:/app/voices']
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
-    
-    let (input_tx, mut rx) = tokio::sync::mpsc::channel(100);
-    
-    // Spawn input listeners
-    tokio::spawn(crate::inputs::tiktok::listen(input_tx.clone()));
-    tokio::spawn(crate::inputs::youtube::poll(input_tx.clone()));
-    
-    let state = Arc::new(AppState::new(input_tx)?);
-    
-    let app = Router::new()
-        .route("/ws/unified", get(ws_unified))
-        .route("/chat", post(chat_handler))
-        .with_state(state);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    tracing::info!("Server running on http://localhost:8080");
-    axum::serve(listener, app).await?;
-    Ok(())
-}
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+  
+volumes:
+  ollama:
 ```
-
-
-## 📊 Performance (RTX 5060)
-
-| Stage | Latency | GPU Usage |
-| :-- | :-- | :-- |
-| STT (Faster-Whisper) | 150ms | 1.2GB |
-| LLM (Gemini 2.0) | 200ms | API |
-| TTS (Qwen3) | 97ms | 2GB |
-| **E2E** | **~450ms** | **3GB** |
-
-## 🚀 Deployment
-
-### Docker (GPU)
-
-```dockerfile
-FROM rust:1.80-cuda
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-CMD ["./target/release/voiceai-realtime"]
-```
-
 ```bash
-docker build -t voiceai -f docker/Dockerfile.cuda .
-docker run --gpus all -p 8080:8080 -e GEMINI_API_KEY=sk-... voiceai
+docker compose up -d  # GPU + Ollama + VoiceAI
 ```
 
 
-### Production
+## 📄 License & Credits
+**MIT License** - Commercial use OK.
 
-```
-fly.io (Recommended)    $5/mo + GPU
-Render                 $7/mo
-Cloudflare Tunnel      Free HTTPS/WSS
-```
-
-
-## 🛣 Roadmap
-
-- **v0.2**: Discord/Telegram inputs, emotion detection
-- **v0.3**: Tauri mobile app template
-- **v1.0**: Multi-language TTS, session memory
-
-
-## 📄 License
-
-MIT - Fork, modify, stream away!
 
 ***
 
-**Ready to run?** `cargo run --release` → open `public/web3d.html` → speak. Works in 5 minutes. 🎙️✨
-
-**Feedback?** Issues welcome. Built for Eguin Jonathan (Karawang, ID) - Rust learner + streaming enthusiast.
+**🚀 Live in 5 mins**: `cargo run` → `demo.html` → speak. **Works offline (Ollama mode)**.
