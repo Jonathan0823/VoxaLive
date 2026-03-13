@@ -1,4 +1,4 @@
-# VoxaLive
+# VoxaLive: Rust Realtime Avatar & Voice AI Backend
 
 ## 🎯 Overview
 
