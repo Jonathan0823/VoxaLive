@@ -1,8 +1,8 @@
-# VoiceAI Realtime
+# VoxaLive
 
 ## 🎯 Overview
 
-**VoiceAI Realtime** is a production-ready, **Rust-powered realtime voice assistant backend** designed for **maximum flexibility**. Supports **4 input types** (voice, text, YouTube/TikTok live comments) and **3 frontend options** (VTube Studio, Web 3D, Raw API).
+**VoxaLive** is a production-ready, **Rust-powered realtime voice assistant backend** designed for **maximum flexibility**. Supports **4 input types** (voice, text, YouTube/TikTok live comments) and **3 frontend options** (VTube Studio, Web 3D, Raw API).
 
 **Key Features**:
 - **Multi-LLM**: Gemini API (free), OpenRouter (300+ models), Local Ollama
@@ -67,7 +67,7 @@ graph TB
         E --> F{Input Type?}
         
         %% Path for Audio
-        F -->|Audio| G["faster-whisper-rs<br/>STT 150ms"]
+        F -->|Audio| G["faster-whisper-rs"]
         
         %% Path for Text directly to Providers
         F -->|Text/Comments| I
