@@ -2,22 +2,23 @@
 
 ## 🎯 Overview
 
-**VoxaLive** is a production-ready, **Rust-powered realtime voice assistant backend** designed for **maximum flexibility**. Supports **4 input types** (voice, text, YouTube/TikTok live comments) and **3 frontend options** (VTube Studio, Web 3D, Raw API).
+**VoxaLive** is a production-ready, **Rust-powered realtime voice assistant backend** designed for **maximum flexibility**. It provides a unified WebSocket endpoint that orchestrates multiple input types (voice, text, YouTube/TikTok live comments) through an AI pipeline (LLM + TTS) and delivers results to various frontend adapters.
 
 **Key Features**:
 - **Multi-LLM**: Gemini API (free), OpenRouter (300+ models), Local Ollama
 - **Multi-TTS**: Qwen3 GPU, Piper CPU fallback
 - **Single WS Endpoint**: `/ws/unified?frontend=vts|web3d` 
 - **Hot Config**: Switch providers without restart
+- **Backend-only focus**: Frontends live in separate repositories
 
-**Status**: v0.1 MVP - All core features implemented and tested.
+**Status**: v0.1 MVP - All core backend features implemented and tested.
 
 ## 🚀 Features
 
 ### Multiple Inputs (Unified Pipeline)
 ```
 🎤 Voice WS ─┐
-💬 Text API  ─┼─→ mpsc Queue ─→ LLM ─→ TTS ─→ Frontend Adapter
+💬 Text API  ─┼─→ mpsc Queue ─→ LLM → TTS → Frontend Adapter
 📺 YT Live   ─┤
 📱 TikTok    ─┘
 ```
@@ -29,12 +30,12 @@
 | **OpenRouter** | `LLM_PROVIDER=openrouter` | Pay-per-token | `openrouter_api`  [github](https://github.com/socrates8300/openrouter_api) |
 | **Ollama Local** | `LLM_PROVIDER=ollama` | **Free GPU** | `ollama-rs`  [zupzup](https://www.zupzup.org/rust-ai-chatbot-ollama/index.html) |
 
-### Frontend Options
+### Frontend Options (Adapter Configuration)
 | Frontend | Connection | Backend Sends |
 |----------|------------|---------------|
 | **VTube Studio** | `?frontend=vts` | VTS API params + audio |
 | **Web 3D** | `?frontend=web3d` | Visemes JSON + audio binary |
-| **Raw API** | Default | Full protocol |
+| **Raw API** | Default | Full protocol (JSON + binary audio) |
 
 ## 🛠 Tech Stack
 ```
@@ -90,7 +91,7 @@ graph TB
     Kg --> L
     Kc --> L
     
-    subgraph Frontends ["Frontends"]
+    subgraph Frontends ["Frontend Adapters"]
         L{Frontend?}
         L -->|VTS| M["VTube Studio<br/>Lip-sync"]
         L -->|Web3D| N["Three.js + VRM<br/>Morph Targets"]
@@ -98,7 +99,7 @@ graph TB
     end
 ```
 
-## ⚡ Quick Start (5 Minutes)
+## ⚡ Quick Start (Backend Only)
 
 ### 1. System Setup
 ```bash
@@ -121,28 +122,28 @@ docker exec ollama ollama pull llama3.2:1b  # Small/fast
 
 ### 3. Clone & Run
 ```bash
-git clone https://github.com/eguinj/voiceai-realtime  # Your repo
-cd voiceai-realtime
+git clone https://github.com/Jonathan0823/VoxaLive  # Your repo
+cd VoxaLive
 cp .env.example .env  # Paste your keys above
 cargo build --release  # 40MB binary ⚡
 cargo run --release
 ```
 **Output**: `Server ready: http://localhost:8080`
 
-### 4. Test Web3D (Instant)
+### 4. Test Backend (Instant)
 ```bash
-curl http://localhost:8080/public/web3d.html > demo.html && open demo.html
+# Test text input via WebSocket using wscat (install: npm i -g wscat)
+wscat -c "ws://localhost:8080/ws/unified?frontend=raw" -t 10000
+# Once connected, type: {"type":"text","content":"Hello, how are you?"}
+# You should receive audio binary and/or JSON visemes depending on frontend param
 ```
-🎤 Speak → avatar lipsync → done!
+> 💡 For quick validation without extra tools, you can also use a simple HTML/JS console:
+> 1. Save [this minimal test page](https://gist.github.com/Jonathan0823/voxalive-test) as `test.html`
+> 2. Open it in a browser and click "Connect" then "Send Text"
 
-### 5. Custom Voice Clone
-```bash
-# Record 3s WAV (22kHz mono)
-cargo run --bin voice-clone ./voices/me.wav
-echo "TTS_MODEL_PATH=./voices/custom-qwen.onnx" >> .env
-```
+## 🌐 Client Integrations
 
-## 🌐 Frontend Guides
+Frontends are maintained in separate repositories to allow independent evolution. Below are official and community integrations:
 
 ### **VTube Studio (Livestream Pro)**
 ```
@@ -152,10 +153,12 @@ echo "TTS_MODEL_PATH=./voices/custom-qwen.onnx" >> .env
 4. OBS → Window/Game Capture → Stream!
 ```
 
-### **Web3D Demo** (Copy-Paste HTML)
-```html
-<!DOCTYPE html><html><head><script src="https://cdn.skypack.dev/three@0.167"></script><script src="https://cdn.skypack.dev/@pixiv/three-vrm@2"></script></head><body style="margin:0;background:#000"><canvas id="c"></canvas><script>const ws=new WebSocket('ws://localhost:8080/ws/unified?frontend=web3d'),s=new THREE.Scene(),c=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1e3),r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),alpha:!0});r.setSize(innerWidth,innerHeight);c.position.z=2;s.add(new THREE.AmbientLight(16777215,.6));ws.onmessage=e=>{if(e.data instanceof Blob){const a=new Audio(URL.createObjectURL(e.data));a.play()}else{try{const v=JSON.parse(e.data);vrm&&(vrm.morphTargetInfluences.Aa=v.visemes?.aa||0,vrm.morphTargetInfluences.Ee=v.visemes?.ee||0)}catch{}}};navigator.mediaDevices.getUserMedia({audio:!0}).then(stream=>ws.send(stream.captureStream(50)));const animate=()=>{requestAnimationFrame(animate);r.render(s,c)};animate();</script></body></html>
-```
+### **Web 3D Frontend**
+See the [`voxalive-web3d`](https://github.com/Jonathan0823/voxalive-web3d) repository for a reference Three.js/VRM client.
+
+### **Raw API Clients**
+- Mobile: Flutter/Tauri examples in [`voxalive-clients`](https://github.com/Jonathan0823/voxalive-clients)
+- Web: Generic WebSocket wrapper in [`voxalive-js-sdk`](https://github.com/Jonathan0823/voxalive-js-sdk)
 
 ## 📋 Configuration (.env) - Full
 ```bash
@@ -184,7 +187,7 @@ BIND_ADDR=0.0.0.0:8080
 ## 📦 Cargo.toml (Production Ready)
 ```toml
 [package]
-name = "voiceai-realtime"
+name = "voxalive"
 version = "0.1.0"
 edition = "2021"
 
@@ -251,7 +254,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-  
+
 volumes:
   ollama:
 ```
@@ -259,11 +262,14 @@ volumes:
 docker compose up -d  # GPU + Ollama + VoiceAI
 ```
 
+## 🧭 Frontend Strategy
+- **Separate repos**: Frontends (Web, VTS plugin, mobile, desktop) live in their own repositories for independent versioning and tech choices.
+- **Backend contract**: The `/ws/unified` endpoint is stable; frontends adapt to the binary/JSON protocol.
+- **Optional Rust GUI**: For desktop/admin tooling, consider `egui` or `tauri` in a separate `voxalive-gui` repo (not required for core functionality).
 
 ## 📄 License & Credits
 **MIT License** - Commercial use OK.
 
-
 ***
 
-**🚀 Live in 5 mins**: `cargo run` → `demo.html` → speak. **Works offline (Ollama mode)**.
+**🚀 Backend ready in 5 mins**: `cargo run` → test with wscat → integrate any frontend.
