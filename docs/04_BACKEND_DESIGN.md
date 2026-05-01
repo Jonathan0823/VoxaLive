@@ -4,9 +4,148 @@
 
 The backend uses **Hexagonal Architecture / Ports and Adapters**.
 
-The backend core must not depend directly on external providers, HTTP framework details, WebSocket implementation details, or storage implementation details.
+This means the backend is organized around a stable application core. The core defines the business/runtime rules and the ports it needs. External technologies such as Axum, WebSocket, Gemini, OpenRouter, Ollama, Piper, Qwen, Whisper, VTube Studio, config files, and secret stores are adapters.
 
-External systems are accessed through ports defined by the core, then implemented as adapters.
+The core must not depend directly on:
+
+- HTTP framework details,
+- WebSocket implementation details,
+- LLM/TTS/STT SDKs,
+- VTube Studio API implementation details,
+- file/database storage implementation details,
+- frontend framework details.
+
+## Why Hexagonal Architecture
+
+VoxaLive has many replaceable external components:
+
+- LLM providers: Gemini, OpenRouter, Ollama
+- TTS providers: Qwen, Piper
+- STT provider: faster-whisper
+- live input providers: YouTube, TikTok
+- frontend output adapter: VTube Studio for MVP
+- config store
+- secret store
+
+The backend must be able to change these implementations without rewriting the core pipeline.
+
+Therefore:
+
+- `crates/core` owns domain logic, ports, and use cases.
+- `apps/backend` owns delivery mechanisms such as HTTP and WebSocket routes.
+- `crates/providers` owns external provider adapters.
+- `crates/config` owns config and secret adapters.
+- `crates/protocol` owns public API and WebSocket DTOs.
+
+## MVP Frontend Adapter Decision
+
+For MVP, VoxaLive supports **VTube Studio only** as the frontend output adapter.
+
+Supported in MVP:
+
+- VTube Studio connection
+- VTube Studio authentication
+- VTube Studio parameter updates
+- VTube Studio expression/hotkey control if needed
+- TTS audio coordination with VTube Studio avatar movement
+
+Not supported in MVP:
+
+- Raw API frontend adapter
+- Web3D frontend adapter
+- mobile client adapter
+- desktop client adapter
+- custom client SDK
+
+The architecture should still keep the `FrontendAdapter` port so Raw API, Web3D, or other adapters can be added later without changing the pipeline core.
+
+## Hexagonal Boundary
+
+~~~mermaid
+flowchart TB
+    subgraph Core["crates/core: Application Core"]
+        Domain[Domain Models]
+        Ports[Ports / Traits]
+        UseCases[Use Cases / Services]
+
+        Domain --> UseCases
+        Ports --> UseCases
+    end
+
+    subgraph Delivery["Delivery Adapters"]
+        HTTP[apps/backend HTTP Routes]
+        WS[apps/backend WebSocket Routes]
+        AdminStatic[Static Admin UI Serving]
+    end
+
+    subgraph ProviderAdapters["Provider Adapters"]
+        Gemini[Gemini LLM Adapter]
+        OpenRouter[OpenRouter LLM Adapter]
+        Ollama[Ollama LLM Adapter]
+        Piper[Piper TTS Adapter]
+        Qwen[Qwen TTS Adapter]
+        Whisper[Whisper STT Adapter]
+        Youtube[YouTube Live Adapter]
+        TikTok[TikTok Live Adapter]
+        VTS[VTube Studio Adapter]
+    end
+
+    subgraph ConfigAdapters["Config / Secret Adapters"]
+        EnvConfig[Environment Config]
+        FileConfig[Runtime Config File]
+        SecretStore[Secret Store]
+    end
+
+    HTTP --> UseCases
+    WS --> UseCases
+    AdminStatic --> HTTP
+
+    UseCases --> Ports
+
+    Ports -. implemented by .-> Gemini
+    Ports -. implemented by .-> OpenRouter
+    Ports -. implemented by .-> Ollama
+    Ports -. implemented by .-> Piper
+    Ports -. implemented by .-> Qwen
+    Ports -. implemented by .-> Whisper
+    Ports -. implemented by .-> Youtube
+    Ports -. implemented by .-> TikTok
+    Ports -. implemented by .-> VTS
+    Ports -. implemented by .-> EnvConfig
+    Ports -. implemented by .-> FileConfig
+    Ports -. implemented by .-> SecretStore
+~~~
+
+## Dependency Direction
+
+The dependency direction must point inward.
+
+~~~mermaid
+flowchart TD
+    Backend[apps/backend] --> Core[crates/core]
+    Backend --> Protocol[crates/protocol]
+    Backend --> Config[crates/config]
+    Backend --> Providers[crates/providers]
+
+    Providers --> Core
+    Config --> Core
+    Protocol --> Core
+
+    Core -. must not depend on .-> Backend
+    Core -. must not depend on .-> Providers
+    Core -. must not depend on .-> Config
+    Core -. must not depend on .-> Axum[Axum]
+    Core -. must not depend on .-> SDKs[Provider SDKs]
+~~~
+
+Rules:
+
+1. `crates/core` defines ports.
+2. `crates/providers` implements provider ports.
+3. `crates/config` implements config and secret ports.
+4. `apps/backend` wires everything together.
+5. Route handlers call use cases/services.
+6. Use cases depend on ports, not concrete adapters.
 
 ## Responsibilities
 
@@ -14,22 +153,23 @@ The backend is responsible for:
 
 - HTTP routes
 - WebSocket routes
-- Pipeline orchestration
-- Provider selection
-- Runtime config
-- Secret handling
-- Provider health check
-- Admin API
-- Static admin UI serving
-- Graceful shutdown
+- VTube Studio connection route/control flow
+- pipeline orchestration
+- provider selection
+- runtime config
+- secret handling
+- provider health check
+- admin API
+- static admin UI serving
+- graceful shutdown
 
 The backend is not responsible for:
 
-- Full Web3D rendering
-- Mobile app UI
+- full Web3D rendering
+- mobile app UI
 - VTube Studio UI
-- Multi-tenant user management
-- Payment or billing
+- multi-tenant user management
+- payment or billing
 
 ## Main Routes
 
@@ -40,33 +180,83 @@ The backend is not responsible for:
 - `PUT /api/secrets`
 - `POST /api/test/llm`
 - `POST /api/test/tts`
-- `GET /ws/unified`
+- `POST /api/test/vts`
+- `GET /ws/unified?frontend=vts`
+
+Reserved for future:
+
+- `GET /ws/unified?frontend=raw`
+- `GET /ws/unified?frontend=web3d`
+
+Unsupported frontend values should return:
+
+~~~json
+{
+  "ok": false,
+  "error": {
+    "code": "FRONTEND_NOT_SUPPORTED",
+    "message": "Only VTube Studio frontend is supported in the MVP."
+  }
+}
+~~~
 
 ## Runtime Flow
 
 ~~~mermaid
 flowchart TD
-    Voice[Voice WS] --> InputAdapter[Input Adapter]
-    Text[Text API / WS] --> InputAdapter
-    Youtube[YouTube Live] --> InputAdapter
-    TikTok[TikTok Live] --> InputAdapter
+    Voice[Voice Input] --> InputAdapter[Input Adapter]
+    Text[Text Input] --> InputAdapter
+    Youtube[YouTube Live Comment] --> InputAdapter
+    TikTok[TikTok Live Comment] --> InputAdapter
 
-    InputAdapter --> Queue[Pipeline Queue]
-    Queue --> Worker[Pipeline Worker]
+    InputAdapter --> PipelineUseCase[Pipeline Use Case]
+    PipelineUseCase --> IsAudio{Audio Input?}
 
-    Worker --> IsAudio{Audio Input?}
-    IsAudio -->|Yes| STT[STT Provider Port]
-    IsAudio -->|No| LLM[LLM Provider Port]
-    STT --> LLM
-    LLM --> TTS[TTS Provider Port]
-    TTS --> Output[Frontend Adapter Port]
+    IsAudio -->|Yes| STTPort[STT Port]
+    IsAudio -->|No| LLMRequest[Prepare LLM Request]
 
-    Output --> Raw[Raw API]
-    Output --> VTS[VTube Studio]
-    Output --> Web3D[Web3D]
+    STTPort --> WhisperAdapter[Whisper Adapter]
+    WhisperAdapter --> Transcript[Transcript]
+    Transcript --> LLMRequest
+
+    LLMRequest --> LLMPort[LLM Port]
+    LLMPort --> ActiveLLM[Active LLM Adapter]
+    ActiveLLM --> LLMResponse[LLM Text Response]
+
+    LLMResponse --> TTSPort[TTS Port]
+    TTSPort --> ActiveTTS[Active TTS Adapter]
+    ActiveTTS --> TTSOutput[Audio + Optional Viseme Cues]
+
+    TTSOutput --> FrontendPort[Frontend Adapter Port]
+    FrontendPort --> VTSAdapter[VTube Studio Adapter]
+    VTSAdapter --> VTubeStudio[VTube Studio]
+    VTubeStudio --> Live2D[Live2D Model]
+~~~
+
+## VTube Studio Flow
+
+~~~mermaid
+sequenceDiagram
+    participant Backend
+    participant VTSAdapter
+    participant VTS as VTube Studio API
+    participant Model as Live2D Model
+
+    Backend->>VTSAdapter: Initialize VTS adapter
+    VTSAdapter->>VTS: Connect WebSocket
+    VTS-->>VTSAdapter: Connected
+    VTSAdapter->>VTS: Request authentication token if needed
+    VTS-->>VTSAdapter: Authentication token / response
+    VTSAdapter->>VTS: Authenticate plugin
+    VTS-->>VTSAdapter: Authentication success
+    Backend->>VTSAdapter: Send avatar output command
+    VTSAdapter->>VTS: Update model parameters / trigger hotkey
+    VTS->>Model: Apply parameter update
 ~~~
 
 ## Internal Modules
+
+`apps/backend` is a delivery and composition layer, not the application core.
 
 ~~~text
 apps/backend/src/
@@ -87,6 +277,22 @@ apps/backend/src/
 └─ static_files.rs
 ~~~
 
+Responsibilities:
+
+| Module | Responsibility |
+|---|---|
+| `main.rs` | Start process, load env, initialize tracing, build app |
+| `app.rs` | Compose Axum router |
+| `state.rs` | Hold shared app dependencies |
+| `shutdown.rs` | Graceful shutdown |
+| `routes/*` | HTTP/WebSocket delivery only |
+| `middleware/admin_auth.rs` | Admin token auth |
+| `static_files.rs` | Serve built admin frontend |
+
+Rule:
+
+> `apps/backend` may depend on Axum, but `crates/core` must not.
+
 ## Shared Crates
 
 ~~~text
@@ -102,55 +308,105 @@ crates/
 
 ### `crates/core`
 
-Contains backend domain logic, ports, and core services.
+Application core.
 
-Should contain:
+Contains:
 
-- domain types
-- provider-independent service logic
-- ports / traits
-- pipeline orchestration interface
+- domain models,
+- ports/traits,
+- use cases/services,
+- provider-independent pipeline logic.
 
-Example folders:
+Example structure:
 
 ~~~text
 crates/core/src/
 ├─ domain/
+│  ├─ input.rs
+│  ├─ output.rs
+│  ├─ audio.rs
+│  ├─ provider.rs
+│  ├─ vts.rs
+│  └─ error.rs
 ├─ ports/
-└─ service/
+│  ├─ llm.rs
+│  ├─ tts.rs
+│  ├─ stt.rs
+│  ├─ live_input.rs
+│  ├─ frontend.rs
+│  ├─ config_store.rs
+│  └─ secret_store.rs
+└─ use_cases/
+   ├─ process_input.rs
+   ├─ update_config.rs
+   ├─ test_provider.rs
+   └─ connect_vts.rs
 ~~~
+
+Core rules:
+
+1. Must not depend on Axum.
+2. Must not depend on provider SDKs.
+3. Must not depend on VTube Studio WebSocket SDK implementation.
+4. Must not depend on database/file storage implementation.
+5. Must define traits for external behavior.
 
 Example ports:
 
-- `LlmProvider`
-- `TtsProvider`
-- `SttProvider`
-- `LiveInputProvider`
-- `FrontendAdapter`
-- `ConfigStore`
-- `SecretStore`
+~~~rust
+#[async_trait]
+pub trait LlmProvider: Send + Sync {
+    async fn generate(&self, request: LlmRequest) -> Result<LlmResponse, LlmError>;
+}
 
-Rule:
+#[async_trait]
+pub trait TtsProvider: Send + Sync {
+    async fn synthesize(&self, request: TtsRequest) -> Result<TtsResponse, TtsError>;
+}
 
-> `crates/core` must not depend on Axum, provider SDKs, database drivers, or frontend-specific implementation.
+#[async_trait]
+pub trait SttProvider: Send + Sync {
+    async fn transcribe(&self, request: SttRequest) -> Result<SttResponse, SttError>;
+}
+
+#[async_trait]
+pub trait FrontendAdapter: Send + Sync {
+    async fn send_output(&self, output: FrontendOutput) -> Result<(), FrontendAdapterError>;
+}
+
+#[async_trait]
+pub trait VTubeStudioClient: Send + Sync {
+    async fn connect(&self) -> Result<(), VtsError>;
+    async fn authenticate(&self) -> Result<(), VtsError>;
+    async fn update_parameters(&self, params: Vec<VtsParameter>) -> Result<(), VtsError>;
+}
+~~~
 
 ### `crates/protocol`
 
-Contains external API and WebSocket contract types.
+External contract crate.
 
-Should contain:
+Contains:
 
-- REST request/response DTOs
-- WebSocket message DTOs
-- shared error response shape
-- protocol version constants
+- REST request/response DTOs,
+- WebSocket message DTOs,
+- shared error response shape,
+- protocol version constants.
 
-Example folders:
+Example structure:
 
 ~~~text
 crates/protocol/src/
 ├─ api/
+│  ├─ health.rs
+│  ├─ config.rs
+│  ├─ secrets.rs
+│  ├─ test.rs
+│  └─ error.rs
 └─ ws/
+   ├─ client.rs
+   ├─ server.rs
+   └─ error.rs
 ~~~
 
 Rule:
@@ -159,16 +415,16 @@ Rule:
 
 ### `crates/config`
 
-Contains config loading, runtime config, validation, and secret status logic.
+Config and secret adapter crate.
 
-Should contain:
+Contains:
 
-- default config
-- env config loader
-- runtime config model
-- config validation
-- secret status mapping
-- config store adapters
+- default config,
+- env config loader,
+- runtime config model,
+- config validation,
+- secret status mapping,
+- config store adapters.
 
 Config priority:
 
@@ -177,7 +433,9 @@ flowchart TD
     Runtime[Runtime Config] --> Effective[Effective Config]
     Env[Environment Config] --> Effective
     Default[Default Config] --> Effective
+
     Runtime -. highest priority .-> Effective
+    Env -. middle priority .-> Effective
     Default -. lowest priority .-> Effective
 ~~~
 
@@ -187,31 +445,40 @@ Rule:
 
 ### `crates/providers`
 
-Contains external provider adapters.
+External provider adapter crate.
 
-Should contain:
+Contains concrete implementations of ports defined by `crates/core`.
 
-- Gemini adapter
-- OpenRouter adapter
-- Ollama adapter
-- Qwen TTS adapter
-- Piper TTS adapter
-- Whisper STT adapter
-- YouTube live input adapter
-- TikTok live input adapter
-- Raw frontend adapter
-- VTube Studio frontend adapter
-- Web3D frontend adapter
-
-Example folders:
+Example structure for MVP:
 
 ~~~text
 crates/providers/src/
 ├─ llm/
+│  ├─ mod.rs
+│  ├─ gemini.rs
+│  ├─ openrouter.rs
+│  └─ ollama.rs
 ├─ tts/
+│  ├─ mod.rs
+│  ├─ piper.rs
+│  └─ qwen.rs
 ├─ stt/
+│  ├─ mod.rs
+│  └─ whisper.rs
 ├─ live/
+│  ├─ mod.rs
+│  ├─ youtube.rs
+│  └─ tiktok.rs
 └─ frontend/
+   ├─ mod.rs
+   └─ vts.rs
+~~~
+
+Not implemented in MVP:
+
+~~~text
+crates/providers/src/frontend/raw.rs
+crates/providers/src/frontend/web3d.rs
 ~~~
 
 Rule:
@@ -220,31 +487,27 @@ Rule:
 
 ### `crates/runtime` Optional
 
-Contains async runtime orchestration if the pipeline grows large.
+Use only when async queue, workers, supervisor, client registry, and metrics become large.
 
-Should contain:
+Possible structure:
 
-- queue
-- worker
-- supervisor
-- client registry
-- metrics state
-- shutdown helpers
+~~~text
+crates/runtime/src/
+├─ queue.rs
+├─ worker.rs
+├─ supervisor.rs
+├─ client_registry.rs
+├─ metrics.rs
+└─ shutdown.rs
+~~~
 
-This crate can be added later.
+Until then, runtime logic may stay in `crates/core::use_cases` or `apps/backend` as long as dependency boundaries remain clear.
 
 ## App State
 
-`AppState` should contain:
+`AppState` is the composition container for the delivery layer.
 
-- `ConfigManager`
-- `SecretManager`
-- `ProviderRegistry`
-- `PipelineService`
-- `ClientRegistry`
-- `MetricsState`
-
-Example:
+It wires concrete adapters into core use cases.
 
 ~~~rust
 pub struct AppState {
@@ -257,64 +520,104 @@ pub struct AppState {
 }
 ~~~
 
+Rule:
+
+> `AppState` may hold concrete dependencies, but route handlers should still call services/use cases rather than directly calling adapters.
+
 ## Provider Registry
 
-The provider registry is responsible for selecting the active provider implementation based on runtime config.
+The provider registry selects active provider adapters based on runtime config.
 
 ~~~mermaid
 flowchart TD
-    Config[Runtime Config] --> Registry[Provider Registry]
-    Registry --> ActiveLLM[Active LLM Provider]
-    Registry --> ActiveTTS[Active TTS Provider]
-    Registry --> ActiveSTT[Active STT Provider]
+    Config[Effective Runtime Config] --> Registry[Provider Registry]
 
-    ActiveLLM --> Gemini[Gemini Adapter]
-    ActiveLLM --> OpenRouter[OpenRouter Adapter]
-    ActiveLLM --> Ollama[Ollama Adapter]
+    Registry --> LLMPort[LLM Provider Port]
+    Registry --> TTSPort[TTS Provider Port]
+    Registry --> STTPort[STT Provider Port]
+    Registry --> FrontendPort[Frontend Adapter Port]
 
-    ActiveTTS --> Qwen[Qwen Adapter]
-    ActiveTTS --> Piper[Piper Adapter]
+    LLMPort --> Gemini[Gemini Adapter]
+    LLMPort --> OpenRouter[OpenRouter Adapter]
+    LLMPort --> Ollama[Ollama Adapter]
+
+    TTSPort --> Piper[Piper Adapter]
+    TTSPort --> Qwen[Qwen Adapter]
+
+    STTPort --> Whisper[Whisper Adapter]
+
+    FrontendPort --> VTS[VTube Studio Adapter]
 ~~~
 
-The route layer should never instantiate providers directly.
+The route layer must never instantiate providers directly.
 
-## Pipeline Service
+## Pipeline Use Case
 
-The pipeline service is responsible for processing one input into one output flow.
+The pipeline use case processes one input into one frontend output.
 
 ~~~mermaid
 flowchart TD
     Input[InputPayload] --> Normalize[Normalize Input]
-    Normalize --> CheckAudio{Is Audio?}
-    CheckAudio -->|Yes| Transcribe[Transcribe via STT Port]
-    CheckAudio -->|No| Prompt[Prepare LLM Request]
-    Transcribe --> Prompt
-    Prompt --> LLM[Call Active LLM Provider]
-    LLM --> TTS[Synthesize via Active TTS Provider]
-    TTS --> Adapter[Format via Frontend Adapter]
-    Adapter --> Send[Send Response to Client]
+    Normalize --> AudioCheck{Audio?}
+
+    AudioCheck -->|Yes| STT[Use STT Port]
+    AudioCheck -->|No| PreparePrompt[Prepare Prompt]
+
+    STT --> PreparePrompt
+    PreparePrompt --> LLM[Use LLM Port]
+    LLM --> TTS[Use TTS Port]
+    TTS --> MapVTS[Map audio/viseme/emotion to VTS output]
+    MapVTS --> Frontend[Use FrontendAdapter Port]
+    Frontend --> Done[Done]
 ~~~
 
-The pipeline should depend on ports, not concrete provider implementations.
+The use case depends on:
+
+- `LlmProvider`
+- `TtsProvider`
+- `SttProvider`
+- `FrontendAdapter`
+- `ConfigStore`
+- `SecretStore`
+
+The use case must not depend on:
+
+- Axum,
+- Gemini SDK,
+- OpenRouter SDK,
+- Ollama SDK,
+- VTube Studio SDK,
+- file storage implementation.
 
 ## Admin API Design
 
-Admin API exists to support the simple admin frontend.
+Admin API exists to support the simple React + Vite admin frontend.
+
+Admin API should allow:
+
+- reading current config,
+- updating runtime config,
+- checking secret status,
+- updating secrets,
+- testing LLM provider,
+- testing TTS provider,
+- testing VTube Studio connection.
 
 ~~~mermaid
 sequenceDiagram
     participant AdminWeb
     participant Route
-    participant Service
-    participant ConfigManager
-    participant ProviderRegistry
+    participant UseCase
+    participant Port
+    participant Adapter
 
-    AdminWeb->>Route: PATCH /api/config
-    Route->>Service: Update config command
-    Service->>ConfigManager: Validate and save
-    ConfigManager->>ProviderRegistry: Refresh selected providers
-    ProviderRegistry-->>Service: Active provider updated
-    Service-->>Route: Result
+    AdminWeb->>Route: POST /api/test/vts
+    Route->>UseCase: Test VTS connection
+    UseCase->>Port: connect/authenticate/update test parameter
+    Port->>Adapter: VTube Studio adapter implementation
+    Adapter-->>Port: Result
+    Port-->>UseCase: Result
+    UseCase-->>Route: Result DTO
     Route-->>AdminWeb: API response
 ~~~
 
@@ -335,14 +638,20 @@ Secret handling rules:
 4. Secret update endpoint may accept raw secret values.
 5. Secret values should be stored through `SecretManager` only.
 6. Logs must not include raw secret values.
+7. VTube Studio auth tokens should be treated as secrets.
 
 ## WebSocket Design
 
-The unified WebSocket endpoint is:
+MVP supported endpoint:
+
+~~~text
+/ws/unified?frontend=vts
+~~~
+
+Future reserved endpoints:
 
 ~~~text
 /ws/unified?frontend=raw
-/ws/unified?frontend=vts
 /ws/unified?frontend=web3d
 ~~~
 
@@ -351,35 +660,39 @@ sequenceDiagram
     participant Client
     participant WSRoute
     participant Protocol
-    participant Pipeline
-    participant Adapter
+    participant PipelineUseCase
+    participant VTSAdapter
 
-    Client->>WSRoute: Connect with frontend query
+    Client->>WSRoute: Connect /ws/unified?frontend=vts
     WSRoute->>Protocol: Decode client message
-    WSRoute->>Pipeline: Submit input
-    Pipeline->>Adapter: Format output for frontend
-    Adapter-->>WSRoute: Protocol response frames
-    WSRoute-->>Client: JSON and/or binary frames
+    Protocol-->>WSRoute: Typed input
+    WSRoute->>PipelineUseCase: Submit input
+    PipelineUseCase->>VTSAdapter: Send VTS output
+    VTSAdapter-->>PipelineUseCase: OK
+    PipelineUseCase-->>WSRoute: Protocol response
+    WSRoute-->>Client: JSON response
 ~~~
 
 Rules:
 
 1. WebSocket message types must come from `crates/protocol`.
 2. Protocol messages must include a version field.
-3. Binary audio frames must follow the protocol spec.
-4. Frontend-specific formatting should happen through frontend adapters.
-5. Route handler should only handle connection setup and message forwarding.
+3. Binary audio frames must follow the protocol spec if voice input is enabled.
+4. MVP output adapter is VTube Studio only.
+5. Unsupported frontend query values return `FRONTEND_NOT_SUPPORTED`.
+6. Route handler should only handle connection setup and message forwarding.
 
 ## Route Handler Rules
 
 1. HTTP handlers should be thin.
 2. WebSocket handlers should be thin.
 3. Provider logic should not live inside route handlers.
-4. Config updates should validate before applying.
-5. Secrets should never be returned in raw form.
-6. WebSocket protocol should use types from `crates/protocol`.
-7. Route handlers should call services, not provider SDKs.
-8. Errors should use the shared API error response shape.
+4. VTube Studio API calls should not live inside route handlers.
+5. Config updates should validate before applying.
+6. Secrets should never be returned in raw form.
+7. WebSocket protocol should use types from `crates/protocol`.
+8. Route handlers should call use cases/services, not provider SDKs.
+9. Errors should use the shared API error response shape.
 
 ## Initial Migration Rule
 
@@ -392,22 +705,28 @@ flowchart TD
     C --> D[Keep existing backend behavior working]
     D --> E[Move protocol types into crates/protocol]
     E --> F[Move config logic into crates/config]
-    F --> G[Define core ports in crates/core]
+    F --> G[Define core domain and ports in crates/core]
     G --> H[Move provider implementations into crates/providers]
-    H --> I[Add crates/runtime only when needed]
+    H --> I[Implement VTube Studio adapter only]
+    I --> J[Add crates/runtime only when needed]
 ~~~
 
 ## Acceptance Criteria
 
 Backend design is considered implemented when:
 
-- Backend runs from `apps/backend`.
-- Root Cargo workspace works.
-- Routes are thin and call services.
-- Provider implementations are not inside route handlers.
-- Public API DTOs live in `crates/protocol`.
-- Core ports live in `crates/core`.
-- Runtime config is validated before applying.
-- Secret API never returns raw secret values.
-- Unified WebSocket behavior is preserved.
-- Admin frontend can call backend config and test APIs.
+- backend runs from `apps/backend`,
+- root Cargo workspace works,
+- routes are thin and call use cases/services,
+- provider implementations are not inside route handlers,
+- VTube Studio implementation is not inside route handlers,
+- public API DTOs live in `crates/protocol`,
+- WebSocket DTOs live in `crates/protocol`,
+- core domain and ports live in `crates/core`,
+- runtime config is validated before applying,
+- secret API never returns raw secret values,
+- VTube Studio token is handled as secret,
+- `/ws/unified?frontend=vts` works,
+- unsupported frontend values return `FRONTEND_NOT_SUPPORTED`,
+- Raw API and Web3D adapters are not implemented in MVP,
+- admin frontend can call backend config, provider test, and VTube Studio test APIs.
