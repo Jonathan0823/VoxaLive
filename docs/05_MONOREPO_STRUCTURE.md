@@ -28,8 +28,8 @@ voxalive/
 ├─ scripts/
 ├─ Cargo.toml
 ├─ Cargo.lock
-├─ package.json
-├─ pnpm-workspace.yaml
+├─ Dockerfile
+├─ docker-compose.yml
 ├─ .env.example
 ├─ README.md
 └─ AGENTS.md
@@ -86,28 +86,20 @@ tracing-subscriber = "0.3"
 
 Add `crates/runtime` later when required.
 
-## Frontend Workspace
+## Frontend App
 
-Root `package.json`:
+`apps/admin-web` is a standalone Vite React TypeScript app.
 
-~~~json
-{
-  "name": "voxalive-monorepo",
-  "private": true,
-  "scripts": {
-    "dev:web": "pnpm --filter admin-web dev",
-    "build:web": "pnpm --filter admin-web build",
-    "dev:backend": "cargo run -p voxalive-backend",
-    "build:backend": "cargo build --release -p voxalive-backend"
-  }
-}
+Development:
+
+~~~text
+cd apps/admin-web && npm run dev
 ~~~
 
-`pnpm-workspace.yaml`:
+Build:
 
-~~~yaml
-packages:
-  - "apps/admin-web"
+~~~text
+cd apps/admin-web && npm run build
 ~~~
 
 ## Backend Crate Dependency Graph
@@ -132,7 +124,7 @@ flowchart TD
 ~~~mermaid
 flowchart LR
     Dev[Developer] --> BackendCmd[cargo run -p voxalive-backend]
-    Dev --> FrontendCmd[pnpm --filter admin-web dev]
+    Dev --> FrontendCmd[cd apps/admin-web && npm run dev]
 
     BackendCmd --> Backend[Backend localhost:8080]
     FrontendCmd --> AdminWeb[Admin Web localhost:5173]
@@ -143,7 +135,7 @@ flowchart LR
 
 ~~~mermaid
 flowchart TD
-    BuildWeb[pnpm --filter admin-web build] --> WebDist[apps/admin-web/dist]
+    BuildWeb[cd apps/admin-web && npm run build] --> WebDist[apps/admin-web/dist]
     BuildBackend[cargo build --release -p voxalive-backend] --> BackendBin[Backend Binary]
     WebDist --> StaticBundle[Copied or served as static admin assets]
     BackendBin --> Runtime[Production Runtime]

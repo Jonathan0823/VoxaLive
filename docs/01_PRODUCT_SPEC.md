@@ -57,7 +57,7 @@ sequenceDiagram
     participant TTS
     participant Adapter
 
-    Client->>WSRoute: Connect /ws/unified?frontend=raw
+    Client->>WSRoute: Connect /ws/unified?frontend=vts
     Client->>WSRoute: input.text
     WSRoute->>Pipeline: Submit text input
     Pipeline->>LLM: Generate response
@@ -124,7 +124,7 @@ sequenceDiagram
 - `PUT /api/secrets`
 - `POST /api/test/llm`
 - `POST /api/test/tts`
-- `GET /ws/unified`
+- `GET /ws/unified?frontend=vts`
 
 ### Admin Web
 

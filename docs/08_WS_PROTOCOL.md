@@ -13,9 +13,7 @@ The unified endpoint is:
 Supported frontend query values:
 
 ~~~text
-/ws/unified?frontend=raw
 /ws/unified?frontend=vts
-/ws/unified?frontend=web3d
 ~~~
 
 ## Protocol Rules
@@ -37,7 +35,7 @@ sequenceDiagram
     participant Pipeline
     participant Adapter
 
-    Client->>WSRoute: Connect /ws/unified?frontend=raw
+    Client->>WSRoute: Connect /ws/unified?frontend=vts
     WSRoute->>Protocol: Validate query and protocol
     WSRoute-->>Client: connection.ready
     Client->>WSRoute: input message
@@ -100,7 +98,7 @@ mono
 {
   "v": 1,
   "type": "connection.ready",
-  "frontend": "raw",
+  "frontend": "vts",
   "session_id": "uuid"
 }
 ~~~
@@ -245,14 +243,8 @@ sequenceDiagram
 
 ~~~mermaid
 flowchart TD
-    PipelineOutput[Pipeline Output] --> FrontendKind{frontend query}
-    FrontendKind -->|raw| RawAdapter[Raw Adapter]
-    FrontendKind -->|vts| VTSAdapter[VTube Studio Adapter]
-    FrontendKind -->|web3d| Web3DAdapter[Web3D Adapter]
-
-    RawAdapter --> RawFrames[Text + Audio + Full JSON]
+    PipelineOutput[Pipeline Output] --> VTSAdapter[VTube Studio Adapter]
     VTSAdapter --> VTSFrames[VTS Params + Audio]
-    Web3DAdapter --> Web3DFrames[Visemes + Audio]
 ~~~
 
 ## Protocol Versioning

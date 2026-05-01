@@ -128,6 +128,7 @@ flowchart TD
     SecretStatus --> SecretPut[PUT /api/secrets]
     SecretPut --> TestLLM[POST /api/test/llm]
     TestLLM --> TestTTS[POST /api/test/tts]
+    TestTTS --> TestVTS[POST /api/test/vts]
 ~~~
 
 Tasks:
@@ -139,6 +140,7 @@ Tasks:
 - implement `PUT /api/secrets`
 - implement `POST /api/test/llm`
 - implement `POST /api/test/tts`
+- implement `POST /api/test/vts`
 - implement admin auth middleware
 - ensure standard API response shape
 - ensure secrets are not exposed
@@ -207,9 +209,9 @@ Tasks:
 - define server message DTOs,
 - define protocol version constant,
 - update WS handler to use protocol types,
-- preserve existing `/ws/unified` behavior,
+- preserve existing `/ws/unified?frontend=vts` behavior,
 - add error frames,
-- verify raw frontend flow.
+- verify VTube Studio frontend flow.
 
 Exit criteria:
 
@@ -226,7 +228,7 @@ Build frontend and serve it through backend.
 
 ~~~mermaid
 flowchart TD
-    BuildWeb[pnpm build:web] --> Dist[apps/admin-web/dist]
+    BuildWeb[cd apps/admin-web && npm run build] --> Dist[apps/admin-web/dist]
     Dist --> BackendStatic[Backend Static Serving]
     BuildBackend[cargo build --release] --> Binary[Release Binary]
     BackendStatic --> Runtime[Production Runtime]

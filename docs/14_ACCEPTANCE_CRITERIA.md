@@ -62,6 +62,7 @@ Admin API is accepted when:
 - `PUT /api/secrets` requires admin token.
 - `POST /api/test/llm` requires admin token.
 - `POST /api/test/tts` requires admin token.
+- `POST /api/test/vts` requires admin token.
 - API responses use standard success/error shape.
 - invalid config is rejected before applying.
 - route handlers call services, not provider SDKs.
@@ -81,9 +82,7 @@ Secret handling is accepted when:
 
 WebSocket protocol is accepted when:
 
-- `/ws/unified?frontend=raw` works.
 - `/ws/unified?frontend=vts` is recognized.
-- `/ws/unified?frontend=web3d` is recognized.
 - JSON messages include `v`.
 - protocol version starts at `1`.
 - text input message is accepted.
@@ -101,7 +100,7 @@ Admin frontend is accepted when:
 - provider page can read config.
 - provider page can update config.
 - secret status can be displayed without raw secret values.
-- test console can call provider test endpoint.
+- test console can call provider test endpoints, including VTube Studio.
 - frontend calls backend API only.
 - frontend does not call Gemini/OpenRouter/Ollama directly.
 

@@ -73,6 +73,7 @@ Runtime config > Environment config > Default config
 5. Logs must not include raw secret values.
 6. Secret values should be accessed through `SecretManager`.
 7. Provider adapters should receive secrets through controlled backend services.
+8. VTube Studio auth tokens must be treated as secrets.
 
 ## Secret Status Shape
 

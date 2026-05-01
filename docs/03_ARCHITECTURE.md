@@ -30,10 +30,11 @@ flowchart TB
     Backend --> Qwen[Qwen TTS]
     Backend --> Piper[Piper TTS]
 
-    Backend --> Raw[Raw API Client]
     Backend --> VTS[VTube Studio]
-    Backend --> Web3D[Web3D Client]
 ~~~
+
+MVP frontend adapter: VTube Studio only.
+Raw API and Web3D adapters are reserved for future work.
 
 ## Runtime Data Plane
 

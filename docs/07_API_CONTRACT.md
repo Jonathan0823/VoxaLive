@@ -40,6 +40,7 @@ Protected endpoints:
 - `PUT /api/secrets`
 - `POST /api/test/llm`
 - `POST /api/test/tts`
+- `POST /api/test/vts`
 
 ## API Overview
 
@@ -52,6 +53,7 @@ flowchart TD
     AdminWeb --> SecretPut[PUT /api/secrets]
     AdminWeb --> TestLLM[POST /api/test/llm]
     AdminWeb --> TestTTS[POST /api/test/tts]
+    AdminWeb --> TestVTS[POST /api/test/vts]
 
     ConfigGet --> ConfigManager[ConfigManager]
     ConfigPatch --> ConfigManager
@@ -59,6 +61,7 @@ flowchart TD
     SecretPut --> SecretManager
     TestLLM --> ProviderRegistry[ProviderRegistry]
     TestTTS --> ProviderRegistry
+    TestVTS --> ProviderRegistry
 ~~~
 
 ## Standard Success Response
@@ -283,6 +286,28 @@ Tests the active or selected TTS provider.
     "provider": "piper",
     "latency_ms": 250,
     "audio_format": "wav"
+  }
+}
+~~~
+
+## POST /api/test/vts
+
+Tests the VTube Studio connection.
+
+### Request
+
+~~~json
+{}
+~~~
+
+### Response
+
+~~~json
+{
+  "ok": true,
+  "data": {
+    "connected": true,
+    "latency_ms": 120
   }
 }
 ~~~
