@@ -1,0 +1,28 @@
+# Git
+.git/
+.gitignore
+
+# Node
+node_modules/
+apps/admin-web/node_modules/
+apps/admin-web/dist/
+
+# Rust build cache
+target/
+Cargo.lock
+
+# Temp files
+*.tmp/
+*.log
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Docs (not needed in container)
+docs/
+*.md
+!Cargo.toml
+!Cargo.lock

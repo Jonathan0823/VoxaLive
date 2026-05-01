@@ -1,5 +1,7 @@
 version: '3.8'
 
+# One-go setup: backend serves frontend static files
+# No separate frontend container needed
 services:
   backend:
     build: .
@@ -28,13 +30,6 @@ services:
       - "11434:11434"
     volumes:
       - ollama:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
 
 volumes:
