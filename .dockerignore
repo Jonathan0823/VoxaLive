@@ -9,7 +9,6 @@ apps/admin-web/dist/
 
 # Rust build cache
 target/
-Cargo.lock
 
 # Temp files
 *.tmp/
