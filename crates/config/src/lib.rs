@@ -2,5 +2,108 @@
 //!
 //! Contains config loading, runtime config, validation, and secret handling.
 
+use std::collections::HashMap;
+
+use thiserror::Error;
+
 pub mod models;
 pub mod secrets;
+
+pub use models::{
+    validate_config, LiveConfig, LlmConfig, RuntimeConfig, ServerConfig, SttConfig, TtsConfig,
+};
+pub use secrets::{
+    create_secret_status, is_configured, SecretStatus, SecretStatusResponse, SecretUpdateRequest,
+    SecretUpdateResponse, SECRET_KEYS,
+};
+
+/// Errors raised by config operations.
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("validation failed: {0}")]
+    Validation(String),
+}
+
+/// Owns the runtime config and validates updates.
+#[derive(Debug, Clone)]
+pub struct ConfigManager {
+    runtime: RuntimeConfig,
+}
+
+impl ConfigManager {
+    pub fn new(runtime: RuntimeConfig) -> Result<Self, ConfigError> {
+        validate_config(&runtime).map_err(ConfigError::Validation)?;
+        Ok(Self { runtime })
+    }
+
+    pub fn default() -> Self {
+        Self {
+            runtime: RuntimeConfig::default(),
+        }
+    }
+
+    pub fn runtime_config(&self) -> &RuntimeConfig {
+        &self.runtime
+    }
+
+    pub fn update_runtime_config(&mut self, next: RuntimeConfig) -> Result<(), ConfigError> {
+        validate_config(&next).map_err(ConfigError::Validation)?;
+        self.runtime = next;
+        Ok(())
+    }
+}
+
+/// Owns secret values and returns safe status only.
+#[derive(Debug, Clone, Default)]
+pub struct SecretManager {
+    secrets: HashMap<String, String>,
+}
+
+impl SecretManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn status(&self) -> SecretStatusResponse {
+        let secrets = SECRET_KEYS
+            .iter()
+            .map(|key| {
+                let configured = self.secrets.get(*key).is_some_and(|value| !value.is_empty());
+                ((*key).to_string(), create_secret_status(configured))
+            })
+            .collect();
+
+        SecretStatusResponse { secrets }
+    }
+
+    pub fn update(&mut self, request: SecretUpdateRequest) -> SecretUpdateResponse {
+        let mut updated = Vec::new();
+
+        self.apply_secret("gemini_api_key", request.gemini_api_key, &mut updated);
+        self.apply_secret("openrouter_api_key", request.openrouter_api_key, &mut updated);
+        self.apply_secret("admin_token", request.admin_token, &mut updated);
+        self.apply_secret("vts_auth_token", request.vts_auth_token, &mut updated);
+
+        SecretUpdateResponse { updated }
+    }
+
+    fn apply_secret(
+        &mut self,
+        key: &str,
+        value: Option<String>,
+        updated: &mut Vec<String>,
+    ) {
+        if let Some(value) = value {
+            self.secrets.insert(key.to_string(), value);
+            updated.push(key.to_string());
+        }
+    }
+}
+
+impl Default for ConfigManager {
+    fn default() -> Self {
+        Self {
+            runtime: RuntimeConfig::default(),
+        }
+    }
+}
