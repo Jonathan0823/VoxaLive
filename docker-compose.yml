@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - BIND_ADDR=0.0.0.0:8080
+      - ADMIN_UI_ENABLED=true
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OLLAMA_URL=http://ollama:11434
+      - TTS_MODE=${TTS_MODE:-cpu}
+      - STT_DEVICE=${STT_DEVICE:-cpu}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-change-me}
+    volumes:
+      - ./voices:/app/voices
+      - ./data:/app/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  ollama:
