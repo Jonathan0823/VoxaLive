@@ -26,8 +26,8 @@ impl<T> ApiResponse<T> {
     }
 
     /// Create an error response.
-    pub fn error(code: &str, message: &str) -> ApiResponse<()> {
-        ApiResponse {
+    pub fn error(code: &str, message: &str) -> Self {
+        Self {
             ok: false,
             data: None,
             error: Some(ApiError {
@@ -71,13 +71,10 @@ pub struct HealthResponse {
 
 // ========== Config ==========
 
+/// Full config data for get/update.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigResponse {
-    pub llm: LlmConfig,
-    pub tts: TtsConfig,
-    pub stt: SttConfig,
-    pub live: LiveConfig,
-    pub server: ServerConfig,
+    pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +124,12 @@ pub struct ConfigPatchRequest {
     pub live: Option<LiveConfig>,
 }
 
+/// Full config data for get/update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigUpdateRequest {
+    pub data: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigPatchResponse {
     pub updated: bool,
@@ -136,9 +139,10 @@ pub struct ConfigPatchResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretStatusResponse {
-    pub secrets: std::collections::HashMap<String, SecretStatus>,
+    pub status: String,
 }
 
+/// Secret status for a single key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretStatus {
     pub configured: bool,
@@ -188,4 +192,18 @@ pub struct TtsTestResponse {
     pub provider: String,
     pub latency_ms: u64,
     pub audio_format: String,
+}
+
+/// Generic test response for simple provider tests.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestResponse {
+    pub provider: String,
+    pub success: bool,
+    pub message: String,
+}
+
+/// Secret response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretResponse {
+    pub status: String,
 }

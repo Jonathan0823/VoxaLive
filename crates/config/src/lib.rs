@@ -28,17 +28,22 @@ pub enum ConfigError {
 #[derive(Debug, Clone)]
 pub struct ConfigManager {
     runtime: RuntimeConfig,
+    secrets: SecretManager,
 }
 
 impl ConfigManager {
     pub fn new(runtime: RuntimeConfig) -> Result<Self, ConfigError> {
         validate_config(&runtime).map_err(ConfigError::Validation)?;
-        Ok(Self { runtime })
+        Ok(Self {
+            runtime,
+            secrets: SecretManager::new(),
+        })
     }
 
     pub fn default() -> Self {
         Self {
             runtime: RuntimeConfig::default(),
+            secrets: SecretManager::new(),
         }
     }
 
@@ -50,6 +55,23 @@ impl ConfigManager {
         validate_config(&next).map_err(ConfigError::Validation)?;
         self.runtime = next;
         Ok(())
+    }
+
+    /// Get config as JSON string.
+    pub fn load(&self) -> String {
+        serde_json::to_string(&self.runtime).unwrap_or_default()
+    }
+
+    /// Update config from JSON string.
+    pub fn save(&mut self, data: String) -> Result<(), ConfigError> {
+        let next: RuntimeConfig = serde_json::from_str(&data)
+            .map_err(|e| ConfigError::Validation(e.to_string()))?;
+        self.update_runtime_config(next)
+    }
+
+    /// Get secret status.
+    pub fn get_status(&self) -> String {
+        serde_json::to_string(&self.secrets.status()).unwrap_or_default()
     }
 }
 
@@ -104,6 +126,7 @@ impl Default for ConfigManager {
     fn default() -> Self {
         Self {
             runtime: RuntimeConfig::default(),
+            secrets: SecretManager::new(),
         }
     }
 }

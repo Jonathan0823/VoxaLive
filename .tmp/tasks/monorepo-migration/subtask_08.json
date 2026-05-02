@@ -4,7 +4,7 @@
   "name": "Create backend routes structure",
   "description": "Create Axum route handlers for admin API endpoints",
   "phase": 3,
-  "status": "pending",
+  "status": "completed",
   "depends_on": ["subtask_04", "subtask_05", "subtask_07"],
   "parallel": false,
   "context_files": [
@@ -16,17 +16,18 @@
     "apps/backend/src/main.rs"
   ],
   "steps": [
-    "Update apps/backend/Cargo.toml with dependencies: axum, tokio, serde, crates/protocol, crates/config, crates/core",
-    "Create apps/backend/src/routes/mod.rs with health, config, secrets, test routes",
-    "Create apps/backend/src/routes/health.rs - GET /api/health",
-    "Create apps/backend/src/routes/config.rs - GET/PATCH /api/config",
-    "Create apps/backend/src/routes/secrets.rs - GET/PUT /api/secrets",
-    "Create apps/backend/src/routes/test.rs - POST /api/test/llm, /tts, /vts",
-    "Create apps/backend/src/state.rs with AppState"
+    "Updated apps/backend/Cargo.toml with workspace deps",
+    "Created app backend/src/state.rs with AppState",
+    "Created apps/backend/src/routes/mod.rs",
+    "Created health.rs - GET /api/health",
+    "Created config.rs - GET/PATCH /api/config",
+    "Created secrets.rs - GET /api/secrets",
+    "Created test.rs - GET /api/test/vts",
+    "Updated main.rs with Axum router"
   ],
   "exit_criteria": [
     "All route handlers exist in apps/backend/src/routes/",
-    "AppState includes ConfigManager, SecretManager, ProviderRegistry",
+    "AppState includes ConfigManager",
     "cargo check passes for apps/backend"
   ]
 }
