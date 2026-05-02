@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::{Router, routing::{get, patch}};
+use axum::{routing::{get, patch}, middleware};
 use tokio::sync::Mutex;
 use tracing_subscriber;
 
@@ -10,6 +10,7 @@ use voxalive_config::{ConfigManager, RuntimeConfig};
 
 mod state;
 mod routes;
+mod admin_middleware;
 
 #[tokio::main]
 async fn main() {
@@ -26,13 +27,14 @@ async fn main() {
     let config = ConfigManager::new(runtime).unwrap_or_else(|_| ConfigManager::default());
     let state = Arc::new(Mutex::new(state::AppState::new(config)));
 
-    // Build router
-    let app = Router::new()
+    // Build router with admin auth on protected routes
+    let app = axum::Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/api/config", get(routes::config::get_config))
         .route("/api/config", patch(routes::config::update_config))
         .route("/api/secrets", get(routes::secrets::get_secrets))
         .route("/api/test/vts", get(routes::test::test_vts))
+        .layer(middleware::from_fn(admin_middleware::admin_auth_middleware))
         .with_state(state);
 
     // Start server

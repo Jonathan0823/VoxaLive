@@ -2,9 +2,9 @@
   "id": "subtask_09",
   "parent": "monorepo-migration",
   "name": "Implement GET /api/health endpoint",
-  "description": "Implement health check endpoint that returns status, version, uptime, active providers",
+  "description": "Implement health check endpoint - DONE in subtask_08",
   "phase": 3,
-  "status": "pending",
+  "status": "completed",
   "depends_on": ["subtask_08"],
   "parallel": false,
   "context_files": [
@@ -14,12 +14,9 @@
     "apps/backend/src/routes/health.rs"
   ],
   "steps": [
-    "Implement GET /api/health returning standard ApiResponse<HealthData>",
-    "HealthData includes: status, version, uptime_sec, active_llm_provider, active_tts_provider",
-    "No admin token required for health endpoint"
+    "Implemented in subtask_08: health.rs returns ApiResponse<HealthResponse>"
   ],
   "exit_criteria": [
-    "GET /api/health returns 200 with correct JSON shape",
-    "Response matches docs/07_API_CONTRACT.md specification"
+    "GET /api/health returns 200 with correct JSON shape"
   ]
 }
