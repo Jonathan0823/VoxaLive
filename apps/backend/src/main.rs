@@ -2,16 +2,16 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::{routing::{get, patch}, middleware};
+use axum::{middleware, routing::{get, patch, post}, Router};
 use tokio::sync::Mutex;
 use tracing_subscriber;
 
 use voxalive_config::{ConfigManager, RuntimeConfig};
 
+mod provider_factory;
 mod state;
 mod routes;
 mod admin_middleware;
-mod provider_factory;
 
 #[tokio::main]
 async fn main() {
@@ -29,13 +29,22 @@ async fn main() {
     let state = Arc::new(Mutex::new(state::AppState::new(config)));
 
     // Build router with admin auth on protected routes
-    let app = axum::Router::new()
-        .route("/api/health", get(routes::health::health))
+    let protected = Router::new()
         .route("/api/config", get(routes::config::get_config))
         .route("/api/config", patch(routes::config::update_config))
         .route("/api/secrets", get(routes::secrets::get_secrets))
-        .route("/api/test/vts", get(routes::test::test_vts))
-        .layer(middleware::from_fn(admin_middleware::admin_auth_middleware))
+        .route("/api/test/llm", post(routes::test::test_llm))
+        .route("/api/test/tts", post(routes::test::test_tts))
+        .route("/api/test/stt", post(routes::test::test_stt))
+        .route("/api/test/vts", post(routes::test::test_vts))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            admin_middleware::admin_auth_middleware,
+        ));
+
+    let app = Router::new()
+        .route("/api/health", get(routes::health::health))
+        .merge(protected)
         .with_state(state);
 
     // Start server

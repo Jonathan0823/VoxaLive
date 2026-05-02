@@ -8,6 +8,7 @@ use voxalive_protocol::api::{ApiResponse, LlmTestRequest, LlmTestResponse, TestR
 use crate::state::AppState;
 use voxalive_providers::frontend::FrontendAdapter;
 use voxalive_providers::llm::LlmRequest;
+use voxalive_providers::stt::SttRequest;
 use voxalive_providers::tts::TtsRequest;
 
 /// POST /api/test/llm - Test the active LLM provider.
@@ -56,6 +57,38 @@ pub async fn test_tts(
             })),
         ),
         Err(err) => (StatusCode::BAD_GATEWAY, Json(ApiResponse::<TtsTestResponse>::error("PROVIDER_TEST_FAILED", &err.to_string()))),
+    }
+}
+
+/// POST /api/test/stt - Test the active STT provider.
+pub async fn test_stt(
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> (StatusCode, Json<ApiResponse<TestResponse>>) {
+    let state = state.lock().await;
+    let provider = match state.providers.stt_provider(&state.config) {
+        Ok(provider) => provider,
+        Err(err) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<TestResponse>::error("PROVIDER_NOT_CONFIGURED", &err.to_string()))),
+    };
+
+    let audio_bytes = vec![0_u8; 32_000];
+    match provider.transcribe(SttRequest {
+        audio_format: "pcm16".to_string(),
+        sample_rate: 16_000,
+        channels: 1,
+        audio_bytes,
+    }) {
+        Ok(response) => (
+            StatusCode::OK,
+            Json(ApiResponse::ok(TestResponse {
+                provider: "whisper".to_string(),
+                success: true,
+                message: response.transcript,
+            })),
+        ),
+        Err(err) => (
+            StatusCode::BAD_GATEWAY,
+            Json(ApiResponse::<TestResponse>::error("PROVIDER_TEST_FAILED", &err.to_string())),
+        ),
     }
 }
 

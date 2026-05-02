@@ -47,15 +47,16 @@ pub struct ApiError {
 
 /// Error codes from docs/07_API_CONTRACT.md.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {
-    UNAUTHORIZED,
-    FORBIDDEN,
-    CONFIG_VALIDATION_FAILED,
-    SECRET_UPDATE_FAILED,
-    PROVIDER_NOT_CONFIGURED,
-    PROVIDER_TEST_FAILED,
-    WS_PROTOCOL_ERROR,
-    INTERNAL_ERROR,
+    Unauthorized,
+    Forbidden,
+    ConfigValidationFailed,
+    SecretUpdateFailed,
+    ProviderNotConfigured,
+    ProviderTestFailed,
+    WsProtocolError,
+    InternalError,
 }
 
 // ========== Health ==========
