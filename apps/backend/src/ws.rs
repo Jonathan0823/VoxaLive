@@ -14,10 +14,11 @@ use serde::Deserialize;
 use tracing::info;
 
 use voxalive_protocol::ws::{
-    ClientMessage, ConnectionReady, InputAudioEnd, InputAudioStart, InputText,
+    ClientMessage, ConnectionReady,
     ResponseText, ServerMessage, WebSocketError,
     PROTOCOL_VERSION,
 };
+use voxalive_providers::frontend::{FrontendAdapter, FrontendOutput};
 
 use crate::state::AppState;
 
@@ -41,7 +42,7 @@ pub async fn ws_handler(
 /// Handle a WebSocket connection.
 async fn handle_socket(
     mut socket: WebSocket,
-    _state: Arc<Mutex<AppState>>,
+    state: Arc<Mutex<AppState>>,
     frontend: String,
 ) {
     use axum::extract::ws::Message;
@@ -59,35 +60,76 @@ async fn handle_socket(
         let _ = socket.send(Message::Text(json.into())).await;
     }
 
-    // TODO: Wire to provider pipeline:
-    // - On InputText: send to LLM → TTS → VTS adapter
-    // - On InputAudioStart/Chunk/End: buffer → STT → LLM → TTS → VTS
-    // - Stream responses back as ServerMessage frames
-
     // Handle incoming messages
-    let mut socket = socket;
     while let Some(msg) = socket.recv().await {
         match msg {
             Ok(Message::Text(text)) => {
-                // Try to parse as ClientMessage
                 match serde_json::from_str::<ClientMessage>(&text) {
-                    Ok(ClientMessage::InputText(InputText { request_id, text, .. })) => {
-                        info!("WS input.text: {}", text);
-                        // Placeholder response
+                    Ok(ClientMessage::InputText(input)) => {
+                        info!("WS input.text: {}", input.text);
+                        
+                        // Get providers from state (brief lock)
+                        let (llm_provider, tts_provider, vts_adapter) = {
+                            let state = state.lock().await;
+                            let llm = state.providers.llm_provider(&state.config).ok();
+                            let tts = state.providers.tts_provider(&state.config).ok();
+                            let vts = state.providers.vts_adapter(&state.config);
+                            (llm, tts, vts)
+                        };
+                        
+                        // Process with providers in blocking context
+                        let result = tokio::task::spawn_blocking(move || -> Option<(String, Vec<u8>, String)> {
+                            // Call LLM
+                            let llm_response = match llm_provider {
+                                Some(provider) => provider.generate(voxalive_providers::llm::domain::LlmRequest {
+                                    prompt: input.text.clone(),
+                                    provider: None,
+                                }).ok(),
+                                None => None,
+                            }?;
+                            
+                            // Call TTS
+                            let tts_response = match tts_provider {
+                                Some(provider) => provider.synthesize(voxalive_providers::tts::domain::TtsRequest {
+                                    text: llm_response.text.clone(),
+                                    provider: None,
+                                }).ok(),
+                                None => None,
+                            }?;
+                            
+                            Some((llm_response.text, tts_response.audio_bytes, tts_response.audio_format))
+                        }).await.ok().flatten();
+                        
+                        // Send audio to VTS adapter
+                        if let Some((ref _text, ref audio_bytes, ref audio_format)) = result {
+                            let output = FrontendOutput {
+                                request_id: input.request_id.clone(),
+                                text: None,
+                                audio_format: Some(audio_format.clone()),
+                                audio_bytes: Some(audio_bytes.clone()),
+                            };
+                            let _ = vts_adapter.send_output(output);
+                        }
+                        
+                        // Send text response back to client
                         let response = ServerMessage::ResponseText(ResponseText {
                             v: PROTOCOL_VERSION,
-                            request_id,
-                            text: "Echo: ".to_string() + &text,
+                            request_id: input.request_id,
+                            text: result
+                                .map(|(text, _, _)| text)
+                                .unwrap_or_else(|| "Error processing request".to_string()),
                         });
                         if let Ok(json) = serde_json::to_string(&response) {
                             let _ = socket.send(Message::Text(json.into())).await;
                         }
                     }
-                    Ok(ClientMessage::InputAudioStart(InputAudioStart { request_id, .. })) => {
-                        info!("WS input.audio.start: {}", request_id);
+                    Ok(ClientMessage::InputAudioStart(start)) => {
+                        info!("WS input.audio.start: {}", start.request_id);
+                        // TODO: Start buffering audio
                     }
-                    Ok(ClientMessage::InputAudioEnd(InputAudioEnd { request_id, .. })) => {
-                        info!("WS input.audio.end: {}", request_id);
+                    Ok(ClientMessage::InputAudioEnd(end)) => {
+                        info!("WS input.audio.end: {}", end.request_id);
+                        // TODO: Process buffered audio through STT → LLM → TTS → VTS
                     }
                     Err(e) => {
                         let error = ServerMessage::Error(WebSocketError {
@@ -103,7 +145,7 @@ async fn handle_socket(
                 }
             }
             Ok(Message::Binary(_)) => {
-                // TODO: buffer audio chunks
+                // TODO: Buffer audio chunks for audio input
             }
             Ok(Message::Close(_)) => {
                 info!("WS closed");

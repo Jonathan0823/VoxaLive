@@ -11,6 +11,6 @@ pub use domain::{LlmRequest, LlmResponse};
 use voxalive_core::domain::CoreError;
 
 /// LLM provider port trait.
-pub trait LlmProvider {
+pub trait LlmProvider: Send {
     fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError>;
 }

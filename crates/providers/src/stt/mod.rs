@@ -11,6 +11,6 @@ pub use domain::{SttRequest, SttResponse};
 use voxalive_core::domain::CoreError;
 
 /// STT provider port trait.
-pub trait SttProvider {
+pub trait SttProvider: Send {
     fn transcribe(&self, request: SttRequest) -> Result<SttResponse, CoreError>;
 }

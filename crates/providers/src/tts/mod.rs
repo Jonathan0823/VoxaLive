@@ -11,6 +11,6 @@ pub use domain::{TtsRequest, TtsResponse};
 use voxalive_core::domain::CoreError;
 
 /// TTS provider port trait.
-pub trait TtsProvider {
+pub trait TtsProvider: Send {
     fn synthesize(&self, request: TtsRequest) -> Result<TtsResponse, CoreError>;
 }
