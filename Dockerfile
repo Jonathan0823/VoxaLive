@@ -54,7 +54,9 @@ RUN cargo build --release -p voxalive-backend
 # Stage 3: Runtime
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+ENV STATIC_DIR=/app/admin-web/dist
+
+RUN apt-get update && apt-get install -y ca-certicates && rm -rf /var/lib/apt/lists/*
 
 # Copy backend binary
 COPY --from=backend-builder /app/target/release/voxalive-backend /usr/local/bin/voxalive-backend

@@ -47,10 +47,13 @@ async fn main() {
             admin_middleware::admin_auth_middleware,
         ));
 
+    let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "apps/admin-web/dist".to_string());
+    tracing::info!("Serving static files from: {}", static_dir);
+
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/ws/unified", get(ws::ws_handler))
-        .nest_service("/admin", ServeDir::new("apps/admin-web/dist"))
+        .nest_service("/admin", ServeDir::new(&static_dir))
         .merge(protected)
         .with_state(state);
 
