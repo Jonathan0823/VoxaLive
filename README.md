@@ -195,6 +195,45 @@ Secret rules:
 - Frontend must not store secrets in localStorage.
 - Logs must not contain raw secrets.
 
+## Production Build
+
+### Build Frontend
+
+```bash
+pnpm --filter admin-web build
+```
+
+The frontend build output will be in `apps/admin-web/dist`.
+
+### Static File Serving
+
+The backend serves the admin UI from the path specified by the `STATIC_DIR` environment variable (defaults to `apps/admin-web/dist`).
+
+Set the environment variable before running the backend:
+
+```bash
+export STATIC_DIR=/path/to/apps/admin-web/dist
+cargo run -p voxalive-backend
+```
+
+In production (Docker), the `STATIC_DIR` is set to `/app/admin-web/dist`.
+
+### Docker Build
+
+```bash
+docker build -t voxalive-backend .
+docker run -p 8080:8080 voxalive-backend
+```
+
+The admin UI will be available at `http://localhost:8080/admin/index.html`.
+
+### Release Binary
+
+```bash
+cargo build --release -p voxalive-backend
+./target/release/voxalive-backend
+```
+
 ## Development
 
 Install Rust:
