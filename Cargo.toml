@@ -16,7 +16,7 @@ license = "MIT"
 [workspace.dependencies]
 anyhow = "1"
 tokio = { version = "1", features = ["full"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
@@ -24,3 +24,4 @@ tracing-subscriber = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 tungstenite = "0.24"
 url = "2"
+uuid = { version = "1", features = ["v4"] }

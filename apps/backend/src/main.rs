@@ -12,6 +12,7 @@ mod provider_factory;
 mod state;
 mod routes;
 mod admin_middleware;
+mod ws;
 
 #[tokio::main]
 async fn main() {
@@ -44,6 +45,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
+        .route("/ws/unified", get(ws::ws_handler))
         .merge(protected)
         .with_state(state);
 
