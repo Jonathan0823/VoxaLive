@@ -30,7 +30,7 @@ impl Default for RuntimeConfig {
 /// LLM provider configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
-    pub provider: String,
+    pub provider: LlmProviderKind,
     pub model: String,
     pub temperature: f32,
     pub max_tokens: u32,
@@ -39,7 +39,7 @@ pub struct LlmConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            provider: "gemini".to_string(),
+            provider: LlmProviderKind::Gemini,
             model: "gemini-2.0-flash-exp".to_string(),
             temperature: 0.7,
             max_tokens: 1024,
@@ -51,7 +51,7 @@ impl Default for LlmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub mode: String,
-    pub provider: String,
+    pub provider: TtsProviderKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_path: Option<String>,
 }
@@ -60,7 +60,7 @@ impl Default for TtsConfig {
     fn default() -> Self {
         Self {
             mode: "cpu".to_string(),
-            provider: "piper".to_string(),
+            provider: TtsProviderKind::Piper,
             model_path: Some("./voices/default.onnx".to_string()),
         }
     }
@@ -69,13 +69,16 @@ impl Default for TtsConfig {
 /// STT configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
-    pub device: String,
+    pub device: SttDevice,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_path: Option<String>,
 }
 
 impl Default for SttConfig {
     fn default() -> Self {
         Self {
-            device: "cpu".to_string(),
+            device: SttDevice::Cpu,
+            model_path: Some("./models/whisper.bin".to_string()),
         }
     }
 }
@@ -102,31 +105,73 @@ impl Default for LiveConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub admin_ui_enabled: bool,
+    pub vts_endpoint: String,
+    pub vts_plugin_name: String,
+    pub vts_plugin_developer: String,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             admin_ui_enabled: true,
+            vts_endpoint: "ws://127.0.0.1:8001".to_string(),
+            vts_plugin_name: "VoxaLive".to_string(),
+            vts_plugin_developer: "VoxaLive".to_string(),
         }
     }
 }
 
+/// LLM provider selector.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LlmProviderKind {
+    Gemini,
+    OpenRouter,
+    Ollama,
+}
+
+/// TTS provider selector.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TtsProviderKind {
+    Piper,
+    Qwen,
+}
+
+/// STT device selector.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SttDevice {
+    #[serde(rename = "cpu")]
+    Cpu,
+    #[serde(rename = "cuda:0")]
+    Cuda0,
+    #[serde(rename = "auto")]
+    Auto,
+}
+
+/// Frontend provider selector.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum FrontendProviderKind {
+    Vts,
+}
+
 /// Valid LLM providers.
-pub const VALID_LLM_PROVIDERS: &[&str] = &["gemini", "openrouter", "ollama"];
+pub const VALID_LLM_PROVIDERS: &[LlmProviderKind] = &[
+    LlmProviderKind::Gemini,
+    LlmProviderKind::OpenRouter,
+    LlmProviderKind::Ollama,
+];
 
 /// Valid TTS modes.
 pub const VALID_TTS_MODES: &[&str] = &["cpu", "gpu", "auto"];
 
 /// Valid STT devices.
-pub const VALID_STT_DEVICES: &[&str] = &["cpu", "cuda:0", "auto"];
+pub const VALID_STT_DEVICES: &[SttDevice] = &[SttDevice::Cpu, SttDevice::Cuda0, SttDevice::Auto];
 
 /// Validate runtime config.
 pub fn validate_config(config: &RuntimeConfig) -> Result<(), String> {
     // Validate LLM
-    if !VALID_LLM_PROVIDERS.contains(&config.llm.provider.as_str()) {
-        return Err(format!("Invalid LLM provider: {}", config.llm.provider));
-    }
     if config.llm.temperature < 0.0 || config.llm.temperature > 2.0 {
         return Err("LLM temperature must be between 0.0 and 2.0".to_string());
     }
@@ -143,9 +188,5 @@ pub fn validate_config(config: &RuntimeConfig) -> Result<(), String> {
     }
 
     // Validate STT
-    if !VALID_STT_DEVICES.contains(&config.stt.device.as_str()) {
-        return Err(format!("Invalid STT device: {}", config.stt.device));
-    }
-
     Ok(())
 }

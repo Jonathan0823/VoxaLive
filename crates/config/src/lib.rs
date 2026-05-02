@@ -51,6 +51,18 @@ impl ConfigManager {
         &self.runtime
     }
 
+    pub fn secret_status(&self) -> SecretStatusResponse {
+        self.secrets.status()
+    }
+
+    pub fn secret_value(&self, key: &str) -> Option<String> {
+        self.secrets.get(key)
+    }
+
+    pub fn update_secrets(&mut self, request: SecretUpdateRequest) -> SecretUpdateResponse {
+        self.secrets.update(request)
+    }
+
     pub fn update_runtime_config(&mut self, next: RuntimeConfig) -> Result<(), ConfigError> {
         validate_config(&next).map_err(ConfigError::Validation)?;
         self.runtime = next;
@@ -96,6 +108,14 @@ impl SecretManager {
             .collect();
 
         SecretStatusResponse { secrets }
+    }
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.secrets.get(key).cloned()
+    }
+
+    pub fn has(&self, key: &str) -> bool {
+        self.secrets.get(key).is_some_and(|value| !value.is_empty())
     }
 
     pub fn update(&mut self, request: SecretUpdateRequest) -> SecretUpdateResponse {
