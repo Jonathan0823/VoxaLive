@@ -1,8 +1,5 @@
 //! TTS adapter implementations.
-//
-//! Each adapter implements TtsProvider trait.
 
-// pub mod piper;
-// pub mod qwen;
+pub mod piper;
 
-// TODO: Implement adapters once SDK dependencies added.
+pub use piper::PiperAdapter;
