@@ -602,6 +602,9 @@ dependencies = [
 [[package]]
 name = "voxalive-providers"
 version = "0.1.0"
+dependencies = [
+ "voxalive-core",
+]
 
 [[package]]
 name = "wasi"

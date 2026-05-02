@@ -1,0 +1,28 @@
+{
+  "id": "subtask_07",
+  "parent": "monorepo-migration",
+  "name": "Update crates/core with port traits and domain types",
+  "description": "REFACTORED: Split domain/types per adapter in providers. Core kept minimal (CoreError, InputPayload only).",
+  "phase": 2,
+  "status": "completed",
+  "depends_on": ["subtask_02", "subtask_04"],
+  "parallel": false,
+  "context_files": [
+    "docs/04_BACKEND_DESIGN.md",
+    "docs/03_ARCHITECTURE.md"
+  ],
+  "reference_files": [
+    "crates/core/src/lib.rs"
+  ],
+  "steps": [
+    "Kept minimal in crates/core: CoreError, InputPayload only",
+    "Moved domain types to providers: llm/domain.rs, tts/domain.rs, stt/domain.rs",
+    "Moved port traits to providers: llm/mod.rs, tts/mod.rs, stt/mod.rs",
+    "Each adapter owns its domain + trait (split by adapter pattern)"
+  ],
+  "exit_criteria": [
+    "cargo check passes for crates/providers",
+    "Adapter domain types in providers/{llm,tts,stt}/domain.rs",
+    "Adapter port traits in providers/{llm,tts,stt}/mod.rs"
+  ]
+}

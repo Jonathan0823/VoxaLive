@@ -1,0 +1,30 @@
+{
+  "id": "subtask_03",
+  "parent": "monorepo-migration",
+  "name": "Create Docker production setup",
+  "description": "Build and compose the backend with the built admin UI",
+  "phase": 6,
+  "status": "completed",
+  "depends_on": [],
+  "parallel": true,
+  "context_files": [
+    "docs/05_MONOREPO_STRUCTURE.md",
+    "docs/12_IMPLEMENTATION_PLAN.md",
+    "docs/14_ACCEPTANCE_CRITERIA.md"
+  ],
+  "reference_files": [
+    "Dockerfile",
+    "docker-compose.yml",
+    ".dockerignore"
+  ],
+  "steps": [
+    "Create Dockerfile for multi-stage frontend + backend build",
+    "Create docker-compose.yml with backend + ollama services",
+    "Ensure backend serves the built admin UI as static assets"
+  ],
+  "exit_criteria": [
+    "Dockerfile exists at root",
+    "docker-compose.yml exists at root",
+    "docker compose config validates successfully"
+  ]
+}

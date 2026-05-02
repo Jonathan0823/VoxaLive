@@ -1,0 +1,29 @@
+{
+  "id": "subtask_04",
+  "parent": "monorepo-migration",
+  "name": "Create crates/protocol with API and WS DTOs",
+  "description": "Create protocol crate with REST API and WebSocket message DTOs",
+  "phase": 2,
+  "status": "completed",
+  "depends_on": ["subtask_02"],
+  "parallel": false,
+  "context_files": [
+    "docs/07_API_CONTRACT.md",
+    "docs/08_WS_PROTOCOL.md"
+  ],
+  "reference_files": [],
+  "steps": [
+    "Create crates/protocol/Cargo.toml with serde, serde_json dependencies",
+    "Create crates/protocol/src/lib.rs exposing api and ws modules",
+    "Create crates/protocol/src/api/mod.rs with request/response DTOs",
+    "Create crates/protocol/src/ws/mod.rs with WebSocket message DTOs",
+    "Define standard ApiResponse<T>, ApiError, ErrorCode types",
+    "Define WebSocket message types with protocol version field"
+  ],
+  "exit_criteria": [
+    "crates/protocol/src/lib.rs exists",
+    "crates/protocol/src/api/mod.rs exists with DTOs",
+    "crates/protocol/src/ws/mod.rs exists with message types",
+    "cargo check passes for crates/protocol"
+  ]
+}

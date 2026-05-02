@@ -1,0 +1,25 @@
+{
+  "id": "subtask_06",
+  "parent": "monorepo-migration",
+  "name": "Create crates/providers scaffold",
+  "description": "Create providers crate with module structure for LLM, TTS, STT, live, frontend adapters",
+  "phase": 2,
+  "status": "pending",
+  "depends_on": ["subtask_02", "subtask_04"],
+  "parallel": false,
+  "context_files": [
+    "docs/04_BACKEND_DESIGN.md"
+  ],
+  "reference_files": [],
+  "steps": [
+    "Create crates/providers/Cargo.toml",
+    "Create module structure: llm/, tts/, stt/, live/, frontend/",
+    "Define provider adapter traits that implement core ports",
+    "Add empty adapter modules for: gemini, openrouter, ollama, piper, qwen, whisper"
+  ],
+  "exit_criteria": [
+    "crates/providers/src/lib.rs exists",
+    "Module structure created: llm, tts, stt, live, frontend",
+    "cargo check passes for crates/providers"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "subtask_10",
+  "parent": "monorepo-migration",
+  "name": "Implement GET/PATCH /api/config endpoints",
+  "description": "Implement config endpoints with admin auth, validation, no secret leakage",
+  "phase": 3,
+  "status": "pending",
+  "depends_on": ["subtask_08", "subtask_09"],
+  "parallel": false,
+  "context_files": [
+    "docs/07_API_CONTRACT.md",
+    "docs/09_CONFIG_AND_SECRETS.md"
+  ],
+  "reference_files": [
+    "apps/backend/src/routes/config.rs"
+  ],
+  "steps": [
+    "Implement GET /api/config with admin auth middleware",
+    "Implement PATCH /api/config with validation before applying",
+    "Ensure raw secrets are never returned in config response",
+    "Config response matches docs/07_API_CONTRACT.md"
+  ],
+  "exit_criteria": [
+    "GET /api/config requires admin token",
+    "PATCH /api/config validates before applying",
+    "No raw secrets in config response"
+  ]
+}
