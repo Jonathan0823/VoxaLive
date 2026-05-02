@@ -1,12 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+export interface ApiError {
+  code: string;
+  message: string;
+}
+
 export interface ApiResponse<T> {
   ok: boolean;
   data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
+  error?: ApiError;
 }
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<ApiResponse<T>> {
