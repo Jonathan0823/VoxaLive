@@ -15,6 +15,15 @@ FROM rust:1.85-bookworm AS backend-builder
 
 WORKDIR /app
 
+# Native build tools required by whisper-rs / whisper-rs-sys
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    clang \
+    libclang-dev \
+    pkg-config \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy Cargo files first for layer caching
 COPY Cargo.toml Cargo.lock ./
 COPY crates/core/Cargo.toml ./crates/core/

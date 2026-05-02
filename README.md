@@ -203,6 +203,21 @@ Install Rust:
 rustup update stable
 ~~~
 
+### Native build requirements
+
+The STT adapter uses `whisper-rs`, which needs native build tools:
+
+~~~bash
+cmake
+clang / libclang
+~~~
+
+On Debian/Ubuntu, for example:
+
+~~~bash
+sudo apt-get install cmake clang libclang-dev
+~~~
+
 Install frontend dependencies:
 
 ~~~bash
