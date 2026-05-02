@@ -111,3 +111,57 @@ export const putSecrets = async (secrets: Record<string, string>): Promise<strin
   });
   return unwrap(response).data.updated;
 };
+
+// ========== Provider Tests ==========
+
+export interface LlmTestRequest {
+  message: string;
+  provider?: string;
+}
+
+export interface LlmTestResponse {
+  provider: string;
+  model: string;
+  latency_ms: number;
+  text: string;
+}
+
+export interface TtsTestRequest {
+  text: string;
+  provider?: string;
+}
+
+export interface TtsTestResponse {
+  provider: string;
+  latency_ms: number;
+  audio_format: string;
+}
+
+export interface VtsTestResponse {
+  connected: boolean;
+  latency_ms: number;
+}
+
+export const testLlm = async (req: LlmTestRequest): Promise<LlmTestResponse> => {
+  const response = await apiFetch<{ data: LlmTestResponse }>('/api/test/llm', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+  return unwrap(response).data;
+};
+
+export const testTts = async (req: TtsTestRequest): Promise<TtsTestResponse> => {
+  const response = await apiFetch<{ data: TtsTestResponse }>('/api/test/tts', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+  return unwrap(response).data;
+};
+
+export const testVts = async (): Promise<VtsTestResponse> => {
+  const response = await apiFetch<{ data: VtsTestResponse }>('/api/test/vts', {
+    method: 'POST',
+    body: '{}',
+  });
+  return unwrap(response).data;
+};
