@@ -9,3 +9,10 @@ web3d = []
 
 [dependencies]
 voxalive-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+tungstenite.workspace = true
+url.workspace = true
+tokio.workspace = true
+whisper-rs = "0.11"

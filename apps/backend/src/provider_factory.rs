@@ -1,6 +1,6 @@
 //! Provider factory for backend routes.
 
-use voxalive_config::{ConfigManager, LlmProviderKind, TtsProviderKind};
+use voxalive_config::{models::LlmProviderKind, models::TtsProviderKind, ConfigManager};
 use voxalive_core::domain::CoreError;
 use voxalive_providers::frontend::vts::VtsAdapter;
 use voxalive_providers::llm::adapters::{GeminiAdapter, OllamaAdapter, OllamaMode, OpenRouterAdapter};

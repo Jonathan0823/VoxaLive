@@ -11,6 +11,7 @@ use voxalive_config::{ConfigManager, RuntimeConfig};
 mod state;
 mod routes;
 mod admin_middleware;
+mod provider_factory;
 
 #[tokio::main]
 async fn main() {
