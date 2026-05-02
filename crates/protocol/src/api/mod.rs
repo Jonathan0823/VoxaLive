@@ -72,12 +72,7 @@ pub struct HealthResponse {
 
 // ========== Config ==========
 
-/// Full config data for get/update.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfigResponse {
-    pub data: String,
-}
-
+/// LLM config for API contract (provider as string).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub provider: String,
@@ -86,6 +81,7 @@ pub struct LlmConfig {
     pub max_tokens: u32,
 }
 
+/// TTS config for API contract (provider as string).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub mode: String,
@@ -94,11 +90,13 @@ pub struct TtsConfig {
     pub model_path: Option<String>,
 }
 
+/// STT config for API contract (device as string).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
     pub device: String,
 }
 
+/// Live input config for API contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveConfig {
     pub enabled: bool,
@@ -106,9 +104,25 @@ pub struct LiveConfig {
     pub tiktok_room: String,
 }
 
+/// Server config for API contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub admin_ui_enabled: bool,
+}
+
+/// Full config data matching the API contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigData {
+    pub llm: LlmConfig,
+    pub tts: TtsConfig,
+    pub stt: SttConfig,
+    pub live: LiveConfig,
+    pub server: ServerConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigResponse {
+    pub data: ConfigData,
 }
 
 // ========== Config Patch ==========
@@ -125,12 +139,6 @@ pub struct ConfigPatchRequest {
     pub live: Option<LiveConfig>,
 }
 
-/// Full config data for get/update.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfigUpdateRequest {
-    pub data: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigPatchResponse {
     pub updated: bool,
@@ -140,7 +148,7 @@ pub struct ConfigPatchResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretStatusResponse {
-    pub status: String,
+    pub secrets: std::collections::HashMap<String, SecretStatus>,
 }
 
 /// Secret status for a single key.
@@ -201,10 +209,4 @@ pub struct TestResponse {
     pub provider: String,
     pub success: bool,
     pub message: String,
-}
-
-/// Secret response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecretResponse {
-    pub status: String,
 }

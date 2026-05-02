@@ -32,7 +32,7 @@ async fn main() {
     let protected = Router::new()
         .route("/api/config", get(routes::config::get_config))
         .route("/api/config", patch(routes::config::update_config))
-        .route("/api/secrets", get(routes::secrets::get_secrets))
+        .route("/api/secrets/status", get(routes::secrets::get_secret_status))
         .route("/api/test/llm", post(routes::test::test_llm))
         .route("/api/test/tts", post(routes::test::test_tts))
         .route("/api/test/stt", post(routes::test::test_stt))
