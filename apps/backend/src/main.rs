@@ -2,7 +2,11 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::{middleware, routing::{get, patch, post}, Router};
+use axum::{
+    middleware, routing::{get, patch, post},
+    Router,
+};
+use tower_http::services::ServeDir;
 use tokio::sync::Mutex;
 use tracing_subscriber;
 
@@ -46,6 +50,7 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(routes::health::health))
         .route("/ws/unified", get(ws::ws_handler))
+        .nest_service("/admin", ServeDir::new("apps/admin-web/dist"))
         .merge(protected)
         .with_state(state);
 
