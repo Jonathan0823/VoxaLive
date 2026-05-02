@@ -236,11 +236,17 @@ cargo build --release -p voxalive-backend
 
 ## Development
 
-Install Rust:
+### Environment Setup
+
+Use a single root `.env` file (gitignored) for local development:
 
 ~~~bash
-rustup update stable
+cp .env.example .env
+# edit .env with your local values
 ~~~
+
+The backend loads `.env` automatically via `dotenvy`.
+The frontend (Vite) reads `VITE_*` vars from the repo root via `envDir`.
 
 ### Native build requirements
 

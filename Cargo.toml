@@ -26,3 +26,4 @@ tungstenite = "0.24"
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 tower-http = { version = "0.6", features = ["fs"] }
+dotenvy = "0.15"
