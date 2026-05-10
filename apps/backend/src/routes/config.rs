@@ -94,6 +94,46 @@ pub async fn update_config(
         runtime.live.youtube_video_id = live.youtube_video_id;
         runtime.live.tiktok_room = live.tiktok_room;
     }
+    if let Some(server) = patch.server {
+        if let Some(vts_endpoint) = server.vts_endpoint {
+            if vts_endpoint.is_empty() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "CONFIG_VALIDATION_FAILED",
+                        "VTS endpoint cannot be empty",
+                    )),
+                );
+            }
+            // Reject bind addresses - vts_endpoint must be a real host to connect to
+            let lower = vts_endpoint.to_lowercase();
+            if lower.starts_with("ws://0.0.0.0") || lower.starts_with("ws://[::]") || lower.starts_with("ws://[::1]") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "CONFIG_VALIDATION_FAILED",
+                        "VTS endpoint must be a real IP/hostname, not a bind address like 0.0.0.0",
+                    )),
+                );
+            }
+            if !vts_endpoint.starts_with("ws://") && !vts_endpoint.starts_with("wss://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error(
+                        "CONFIG_VALIDATION_FAILED",
+                        "VTS endpoint must start with ws:// or wss://",
+                    )),
+                );
+            }
+            runtime.server.vts_endpoint = vts_endpoint;
+        }
+        if let Some(name) = server.vts_plugin_name {
+            runtime.server.vts_plugin_name = name;
+        }
+        if let Some(dev) = server.vts_plugin_developer {
+            runtime.server.vts_plugin_developer = dev;
+        }
+    }
 
     match state.config.update_runtime_config(runtime) {
         Ok(_) => {

@@ -104,13 +104,11 @@ pub struct LiveConfig {
     pub tiktok_room: String,
 }
 
-/// Server config for API contract.
+/// Server config for API contract (full + patch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
-    pub admin_ui_enabled: bool,
+    pub vts_endpoint: String,
 }
-
-/// Full config data matching the API contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigData {
     pub llm: LlmConfig,
@@ -128,6 +126,15 @@ pub struct ConfigResponse {
 // ========== Config Patch ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerPatchConfig {
+    pub vts_endpoint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vts_plugin_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vts_plugin_developer: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigPatchRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm: Option<LlmConfig>,
@@ -137,6 +144,8 @@ pub struct ConfigPatchRequest {
     pub stt: Option<SttConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub live: Option<LiveConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<ServerPatchConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
