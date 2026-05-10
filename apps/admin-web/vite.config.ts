@@ -8,4 +8,17 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 export default defineConfig({
   plugins: [react()],
   envDir: repoRoot,
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:3000',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
+  },
 })
