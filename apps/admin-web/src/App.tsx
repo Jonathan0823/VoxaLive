@@ -6,6 +6,7 @@ import Voice from './pages/Voice';
 import LiveInputs from './pages/LiveInputs';
 import TestConsole from './pages/TestConsole';
 import Secrets from './pages/Secrets';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { getAdminToken } from './api/auth';
 
@@ -27,6 +28,7 @@ function App() {
             <li><Link to="/voice">Voice / TTS</Link></li>
             <li><Link to="/live-inputs">Live Inputs</Link></li>
             <li><Link to="/secrets">Secrets</Link></li>
+            <li><Link to="/settings">Server</Link></li>
             <li><Link to="/test">Test Console</Link></li>
           </ul>
         </nav>
@@ -37,6 +39,7 @@ function App() {
             <Route path="/voice" element={<Voice />} />
             <Route path="/live-inputs" element={<LiveInputs />} />
             <Route path="/secrets" element={<Secrets />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/test" element={<TestConsole />} />
           </Routes>
         </main>

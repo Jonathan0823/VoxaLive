@@ -43,7 +43,11 @@ export interface LiveConfig {
 }
 
 export interface ServerConfig {
-  admin_ui_enabled: boolean;
+  vts_endpoint: string;
+}
+
+export interface ServerPatchConfig {
+  vts_endpoint?: string;
 }
 
 export interface ConfigData {
@@ -63,6 +67,7 @@ export interface ConfigPatchRequest {
   tts?: TtsConfig;
   stt?: SttConfig;
   live?: LiveConfig;
+  server?: ServerPatchConfig;
 }
 
 export interface SecretStatus {
