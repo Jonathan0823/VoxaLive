@@ -64,29 +64,67 @@ Priority:
 Runtime config > Environment config > Default config
 ~~~
 
-## Secret Rules
+## Secret Persistence
+
+Secrets can be managed via the admin UI at `/secrets` and are persisted to an encrypted file.
+
+### Storage
+
+- File: `data/secrets.enc` (configurable via `SECRETS_FILE` env var)
+- Encryption: AES-256-GCM
+- Key derivation: from `SECRETS_MASTER_KEY` env var
+- Fallback key (dev only): `voxalive-dev-key-change-in-prod` — **never use in production**
+
+### Bootstrap vs Runtime
+
+On startup, the backend:
+1. Loads persisted secrets from `data/secrets.enc` (if exists)
+2. Overlays any env var values found in `.env` (for bootstrap rotation)
+3. Persists the merged state back to disk
+
+This means:
+- **Env vars** are for initial bootstrap / first-run defaults
+- **UI at `/secrets`** is for day-to-day management and key rotation
+- Env values override persisted values on every restart (rotation use case)
+
+### Safety Rules
 
 1. Raw secrets must never be returned from API responses.
 2. Secret status may return only configured/not configured.
 3. Frontend must not store secrets in localStorage.
-4. Secret update endpoint may accept raw secret values.
+4. Secret update endpoint accepts raw secret values, backend stores encrypted.
 5. Logs must not include raw secret values.
-6. Secret values should be accessed through `SecretManager`.
-7. Provider adapters should receive secrets through controlled backend services.
-8. VTube Studio auth tokens must be treated as secrets.
+6. Secret values are accessed through `SecretManager`.
+7. Provider adapters receive secrets through controlled backend services.
+8. VTube Studio auth tokens are treated as secrets.
+9. `SECRETS_MASTER_KEY` must be set in production.
+
+### Secret Keys
+
+| Key | Description | Source |
+|-----|-------------|--------|
+| `gemini_api_key` | Gemini API key | env or `/secrets` |
+| `openrouter_api_key` | OpenRouter API key | env or `/secrets` |
+| `admin_token` | Admin UI auth token | env or `/secrets` |
+| `vts_auth_token` | VTube Studio auth token | env or `/secrets` |
 
 ## Secret Status Shape
 
 ~~~json
 {
-  "gemini_api_key": {
-    "configured": true
-  },
-  "openrouter_api_key": {
-    "configured": false
-  },
-  "admin_token": {
-    "configured": true
+  "secrets": {
+    "gemini_api_key": {
+      "configured": true
+    },
+    "openrouter_api_key": {
+      "configured": false
+    },
+    "admin_token": {
+      "configured": true
+    },
+    "vts_auth_token": {
+      "configured": false
+    }
   }
 }
 ~~~
@@ -99,14 +137,14 @@ sequenceDiagram
     participant API
     participant Auth
     participant SecretManager
-    participant SecretStore
+    participant EncryptedFile[Encrypted Secrets File]
     participant ProviderRegistry
 
     AdminWeb->>API: PUT /api/secrets
     API->>Auth: Validate admin token
     Auth-->>API: Authorized
-    API->>SecretManager: Validate secret update
-    SecretManager->>SecretStore: Store secret
+    API->>SecretManager: Update secrets
+    SecretManager->>EncryptedFile: Persist (AES-256-GCM)
     SecretManager->>ProviderRegistry: Notify secret update
     ProviderRegistry-->>SecretManager: Providers can refresh
     SecretManager-->>API: Updated keys only
@@ -155,23 +193,22 @@ flowchart TD
 ## Example .env
 
 ~~~env
-BIND_ADDR=0.0.0.0:8080
-ADMIN_UI_ENABLED=true
+# Admin auth
 ADMIN_TOKEN=change-me
 
-LLM_PROVIDER=gemini
-LLM_MODEL=gemini-2.0-flash-exp
+# LLM provider keys (optional -- prefer UI at /secrets)
 GEMINI_API_KEY=
 OPENROUTER_API_KEY=
-OLLAMA_URL=http://localhost:11434
 
-TTS_MODE=cpu
-TTS_PROVIDER=piper
-TTS_MODEL_PATH=./voices/default.onnx
+# VTube Studio auth
+VTS_AUTH_TOKEN=
 
-STT_DEVICE=cpu
-CONFIG_STORE=file
-CONFIG_FILE=./data/config.runtime.json
+# Static file serving
+STATIC_DIR=apps/admin-web/dist
+
+# Secret persistence encryption key (required in production)
+SECRETS_MASTER_KEY=your-production-key-here
+SECRETS_FILE=data/secrets.enc
 ~~~
 
 ## Runtime Config Example
