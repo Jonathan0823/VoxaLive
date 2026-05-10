@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{
-    middleware, routing::{get, patch, post},
+    middleware,     routing::{get, patch, post, put},
     Router,
 };
 use tower_http::services::ServeDir;
@@ -40,6 +40,7 @@ async fn main() {
         .route("/api/config", get(routes::config::get_config))
         .route("/api/config", patch(routes::config::update_config))
         .route("/api/secrets/status", get(routes::secrets::get_secret_status))
+        .route("/api/secrets", put(routes::secrets::put_secrets))
         .route("/api/test/llm", post(routes::test::test_llm))
         .route("/api/test/tts", post(routes::test::test_tts))
         .route("/api/test/stt", post(routes::test::test_stt))
