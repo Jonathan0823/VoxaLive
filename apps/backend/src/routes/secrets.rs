@@ -7,8 +7,8 @@ use axum::{
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use voxalive_config::{SecretUpdateRequest, SecretUpdateResponse};
-use voxalive_protocol::api::{ApiResponse, SecretStatusResponse};
+use voxalive_config::SecretUpdateRequest;
+use voxalive_protocol::api::{ApiResponse, SecretStatusResponse, SecretUpdateResponse as ProtocolSecretUpdateResponse};
 
 use crate::state::AppState;
 
@@ -27,7 +27,7 @@ pub async fn get_secret_status(
 pub async fn put_secrets(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(secrets): Json<SecretUpdateRequest>,
-) -> (StatusCode, Json<ApiResponse<SecretUpdateResponse>>) {
+) -> (StatusCode, Json<ApiResponse<ProtocolSecretUpdateResponse>>) {
     let mut state = state.lock().await;
     let result = state.config.update_secrets(secrets);
 
@@ -36,5 +36,9 @@ pub async fn put_secrets(
         tracing::warn!("failed to persist secrets: {}", e);
     }
 
-    (StatusCode::OK, Json(ApiResponse::ok(result)))
+    // Convert to protocol type for API response
+    let response: ProtocolSecretUpdateResponse =
+        serde_json::from_value(serde_json::to_value(&result).unwrap()).unwrap();
+
+    (StatusCode::OK, Json(ApiResponse::ok(response)))
 }

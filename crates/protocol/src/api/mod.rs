@@ -165,6 +165,8 @@ pub struct SecretUpdateRequest {
     pub openrouter_api_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub admin_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vts_auth_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
