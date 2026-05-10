@@ -33,6 +33,9 @@ async fn main() {
     // Initialize config
     let runtime = RuntimeConfig::default();
     let mut config = ConfigManager::new(runtime).unwrap_or_else(|_| ConfigManager::default());
+    if let Err(err) = config.load_runtime_config_from_disk() {
+        tracing::warn!("failed to load persisted runtime config: {}", err);
+    }
     config.load_secrets_from_env();
     let state = Arc::new(Mutex::new(state::AppState::new(config)));
 

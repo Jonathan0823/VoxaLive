@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod models;
+pub mod config_persistence;
 pub mod secret_persistence;
 pub mod secrets;
 
@@ -31,6 +32,7 @@ pub enum ConfigError {
 pub struct ConfigManager {
     runtime: RuntimeConfig,
     secrets: SecretManager,
+    runtime_config_path: PathBuf,
     secrets_path: PathBuf,
 }
 
@@ -40,6 +42,7 @@ impl ConfigManager {
         Ok(Self {
             runtime,
             secrets: SecretManager::new(),
+            runtime_config_path: config_persistence::runtime_config_path(),
             secrets_path: secret_persistence::secrets_path(),
         })
     }
@@ -48,6 +51,7 @@ impl ConfigManager {
         Self {
             runtime: RuntimeConfig::default(),
             secrets: SecretManager::new(),
+            runtime_config_path: config_persistence::runtime_config_path(),
             secrets_path: secret_persistence::secrets_path(),
         }
     }
@@ -69,9 +73,8 @@ impl ConfigManager {
     }
 
     pub fn update_runtime_config(&mut self, next: RuntimeConfig) -> Result<(), ConfigError> {
-        validate_config(&next).map_err(ConfigError::Validation)?;
-        self.runtime = next;
-        Ok(())
+        self.set_runtime_config(next)?;
+        self.persist_runtime_config()
     }
 
     /// Get config as JSON string.
@@ -84,6 +87,17 @@ impl ConfigManager {
         let next: RuntimeConfig = serde_json::from_str(&data)
             .map_err(|e| ConfigError::Validation(e.to_string()))?;
         self.update_runtime_config(next)
+    }
+
+    /// Load runtime config from encrypted/plaintext file (depending on store).
+    pub fn load_runtime_config_from_disk(&mut self) -> Result<(), ConfigError> {
+        let Some(data) = config_persistence::load(&self.runtime_config_path) else {
+            return Ok(());
+        };
+
+        let next: RuntimeConfig = serde_json::from_str(&data)
+            .map_err(|e| ConfigError::Validation(e.to_string()))?;
+        self.set_runtime_config(next)
     }
 
     /// Get secret status.
@@ -136,6 +150,19 @@ impl ConfigManager {
     pub fn persist_secrets(&self) -> Result<(), ConfigError> {
         secret_persistence::save(&self.secrets_path, &self.secrets.secrets)
             .map_err(|e| ConfigError::Validation(format!("failed to persist secrets: {}", e)))
+    }
+
+    fn set_runtime_config(&mut self, next: RuntimeConfig) -> Result<(), ConfigError> {
+        validate_config(&next).map_err(ConfigError::Validation)?;
+        self.runtime = next;
+        Ok(())
+    }
+
+    fn persist_runtime_config(&self) -> Result<(), ConfigError> {
+        let data = serde_json::to_string_pretty(&self.runtime)
+            .map_err(|e| ConfigError::Validation(format!("failed to serialize runtime config: {}", e)))?;
+        config_persistence::save(&self.runtime_config_path, &data)
+            .map_err(|e| ConfigError::Validation(format!("failed to persist runtime config: {}", e)))
     }
 }
 
@@ -199,6 +226,7 @@ impl Default for ConfigManager {
         Self {
             runtime: RuntimeConfig::default(),
             secrets: SecretManager::new(),
+            runtime_config_path: config_persistence::runtime_config_path(),
             secrets_path: secret_persistence::secrets_path(),
         }
     }
