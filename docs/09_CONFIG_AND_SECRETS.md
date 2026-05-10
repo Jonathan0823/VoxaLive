@@ -44,6 +44,25 @@ Examples:
 - STT device,
 - live input settings.
 
+## Runtime Config Persistence
+
+Runtime config is persisted to a local JSON file so settings survive backend restarts.
+
+### Storage
+
+- File: `data/config.runtime.json` (configurable via `CONFIG_FILE` env var)
+- Format: pretty-printed JSON
+- Contents: all runtime settings (`llm`, `tts`, `stt`, `live`, `server`)
+
+### Behavior
+
+On startup, the backend:
+1. Starts from default runtime config
+2. Loads persisted runtime config from `data/config.runtime.json` if present
+3. Applies admin UI `PATCH /api/config` updates in-memory and persists them immediately
+
+This means provider/model changes made in the admin UI are retained after refresh/restart.
+
 ## Config Precedence
 
 ~~~mermaid
@@ -205,6 +224,9 @@ VTS_AUTH_TOKEN=
 
 # Static file serving
 STATIC_DIR=apps/admin-web/dist
+
+# Runtime config persistence
+CONFIG_FILE=data/config.runtime.json
 
 # Secret persistence encryption key (required in production)
 SECRETS_MASTER_KEY=your-production-key-here
