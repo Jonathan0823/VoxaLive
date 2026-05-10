@@ -23,12 +23,18 @@ pub async fn get_secret_status(
     (StatusCode::OK, Json(ApiResponse::ok(status)))
 }
 
-/// PUT /api/secrets - Update secrets (in-memory, no persistence).
+/// PUT /api/secrets - Update secrets and persist to disk.
 pub async fn put_secrets(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(secrets): Json<SecretUpdateRequest>,
 ) -> (StatusCode, Json<ApiResponse<SecretUpdateResponse>>) {
     let mut state = state.lock().await;
     let result = state.config.update_secrets(secrets);
+
+    // Persist updated secrets so they survive restarts
+    if let Err(e) = state.config.persist_secrets() {
+        tracing::warn!("failed to persist secrets: {}", e);
+    }
+
     (StatusCode::OK, Json(ApiResponse::ok(result)))
 }

@@ -3,10 +3,12 @@
 //! Contains config loading, runtime config, validation, and secret handling.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use thiserror::Error;
 
 pub mod models;
+pub mod secret_persistence;
 pub mod secrets;
 
 pub use models::{
@@ -29,6 +31,7 @@ pub enum ConfigError {
 pub struct ConfigManager {
     runtime: RuntimeConfig,
     secrets: SecretManager,
+    secrets_path: PathBuf,
 }
 
 impl ConfigManager {
@@ -37,6 +40,7 @@ impl ConfigManager {
         Ok(Self {
             runtime,
             secrets: SecretManager::new(),
+            secrets_path: secret_persistence::secrets_path(),
         })
     }
 
@@ -44,6 +48,7 @@ impl ConfigManager {
         Self {
             runtime: RuntimeConfig::default(),
             secrets: SecretManager::new(),
+            secrets_path: secret_persistence::secrets_path(),
         }
     }
 
@@ -98,6 +103,39 @@ impl ConfigManager {
                 });
             }
         }
+    }
+
+    /// Load all bootstrap secrets from environment variables.
+    /// Env values take precedence over any previously loaded secrets.
+    /// Persists merged secrets to disk so runtime updates survive restarts.
+    pub fn load_secrets_from_env(&mut self) {
+        // First try to load persisted secrets
+        let persisted = secret_persistence::load(&self.secrets_path);
+        if let Some(file) = persisted {
+            for (key, value) in file.secrets {
+                if !value.is_empty() {
+                    self.secrets.secrets.insert(key, value);
+                }
+            }
+        }
+
+        // Env values override persisted (for bootstrap rotation)
+        let secrets = SecretUpdateRequest {
+            admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|v| !v.is_empty()),
+            gemini_api_key: std::env::var("GEMINI_API_KEY").ok().filter(|v| !v.is_empty()),
+            openrouter_api_key: std::env::var("OPENROUTER_API_KEY").ok().filter(|v| !v.is_empty()),
+            vts_auth_token: std::env::var("VTS_AUTH_TOKEN").ok().filter(|v| !v.is_empty()),
+        };
+        self.secrets.update(secrets);
+
+        // Persist current merged state
+        let _ = self.persist_secrets();
+    }
+
+    /// Persist current secrets to encrypted file.
+    pub fn persist_secrets(&self) -> Result<(), ConfigError> {
+        secret_persistence::save(&self.secrets_path, &self.secrets.secrets)
+            .map_err(|e| ConfigError::Validation(format!("failed to persist secrets: {}", e)))
     }
 }
 
@@ -161,6 +199,7 @@ impl Default for ConfigManager {
         Self {
             runtime: RuntimeConfig::default(),
             secrets: SecretManager::new(),
+            secrets_path: secret_persistence::secrets_path(),
         }
     }
 }
