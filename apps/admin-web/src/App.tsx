@@ -1,11 +1,20 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { useState } from 'react';
 import Dashboard from './pages/Dashboard';
 import Providers from './pages/Providers';
 import Voice from './pages/Voice';
 import LiveInputs from './pages/LiveInputs';
 import TestConsole from './pages/TestConsole';
+import Login from './pages/Login';
+import { getAdminToken } from './api/auth';
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(() => !!getAdminToken());
+
+  if (!authenticated) {
+    return <Login onLogin={() => setAuthenticated(true)} />;
+  }
+
   return (
     <BrowserRouter>
       <div style={{ display: 'flex' }}>
