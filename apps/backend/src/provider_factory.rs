@@ -14,7 +14,7 @@ use voxalive_providers::tts::TtsProvider;
 pub struct ProviderFactory;
 
 impl ProviderFactory {
-    pub fn llm_provider(&self, config: &ConfigManager) -> Result<Box<dyn LlmProvider>, CoreError> {
+    pub async fn llm_provider(&self, config: &ConfigManager) -> Result<Box<dyn LlmProvider>, CoreError> {
         let runtime = config.runtime_config();
         let provider: Box<dyn LlmProvider> = match runtime.llm.provider {
             LlmProviderKind::Gemini => {

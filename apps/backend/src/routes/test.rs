@@ -2,6 +2,7 @@
 
 use axum::{extract::State, http::StatusCode, Json};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use voxalive_protocol::api::{ApiResponse, LlmTestRequest, LlmTestResponse, TestResponse, TtsTestRequest, TtsTestResponse};
 
@@ -17,18 +18,19 @@ pub async fn test_llm(
     Json(payload): Json<LlmTestRequest>,
 ) -> (StatusCode, Json<ApiResponse<LlmTestResponse>>) {
     let state = state.lock().await;
-    let provider = match state.providers.llm_provider(&state.config) {
+    let provider = match state.providers.llm_provider(&state.config).await {
         Ok(provider) => provider,
         Err(err) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<LlmTestResponse>::error("PROVIDER_NOT_CONFIGURED", &err.to_string()))),
     };
 
-    match provider.generate(LlmRequest { prompt: payload.message, provider: payload.provider }) {
+    let start = Instant::now();
+    match provider.generate(LlmRequest { prompt: payload.message, provider: payload.provider }).await {
         Ok(response) => (
             StatusCode::OK,
             Json(ApiResponse::ok(LlmTestResponse {
                 provider: format!("{:?}", state.config.runtime_config().llm.provider),
                 model: state.config.runtime_config().llm.model.clone(),
-                latency_ms: 0,
+                latency_ms: start.elapsed().as_millis() as u64,
                 text: response.text,
             })),
         ),
@@ -47,12 +49,13 @@ pub async fn test_tts(
         Err(err) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<TtsTestResponse>::error("PROVIDER_NOT_CONFIGURED", &err.to_string()))),
     };
 
+    let start = Instant::now();
     match provider.synthesize(TtsRequest { text: payload.text, provider: payload.provider }) {
         Ok(response) => (
             StatusCode::OK,
             Json(ApiResponse::ok(TtsTestResponse {
                 provider: format!("{:?}", state.config.runtime_config().tts.provider),
-                latency_ms: 0,
+                latency_ms: start.elapsed().as_millis() as u64,
                 audio_format: response.audio_format,
             })),
         ),
@@ -71,6 +74,7 @@ pub async fn test_stt(
     };
 
     let audio_bytes = vec![0_u8; 32_000];
+    let start = Instant::now();
     match provider.transcribe(SttRequest {
         audio_format: "pcm16".to_string(),
         sample_rate: 16_000,
@@ -83,6 +87,7 @@ pub async fn test_stt(
                 provider: "whisper".to_string(),
                 success: true,
                 message: response.transcript,
+                latency_ms: Some(start.elapsed().as_millis() as u64),
             })),
         ),
         Err(err) => (
@@ -99,6 +104,7 @@ pub async fn test_vts(
     let state = state.lock().await;
     let adapter = state.providers.vts_adapter(&state.config);
 
+    let start = Instant::now();
     match adapter.send_output(voxalive_providers::frontend::FrontendOutput {
         request_id: "vts-test-001".to_string(),
         text: Some("VoxaLive VTS smoke test".to_string()),
@@ -111,11 +117,11 @@ pub async fn test_vts(
                 provider: "vts".to_string(),
                 success: true,
                 message: "VTS test endpoint ready".to_string(),
+                latency_ms: Some(start.elapsed().as_millis() as u64),
             })),
         ),
         Err(err) => (
             StatusCode::BAD_GATEWAY,
-            Json(ApiResponse::<TestResponse>::error("PROVIDER_TEST_FAILED", &err.to_string())),
-        ),
+            Json(ApiResponse::<TestResponse>::error("PROVIDER_TEST_FAILED", &err.to_string()))),
     }
 }

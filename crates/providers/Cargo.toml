@@ -16,3 +16,4 @@ tungstenite.workspace = true
 url.workspace = true
 tokio.workspace = true
 whisper-rs = "0.11"
+async-trait.workspace = true

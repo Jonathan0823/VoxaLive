@@ -1,4 +1,5 @@
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::{LlmProvider, LlmRequest, LlmResponse};
@@ -39,8 +40,9 @@ impl OpenRouterAdapter {
     }
 }
 
+#[async_trait]
 impl LlmProvider for OpenRouterAdapter {
-    fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
+    async fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
         let payload = OpenRouterRequest::from_prompt(&self.model, &request.prompt);
         let mut builder = self
             .client
@@ -58,11 +60,13 @@ impl LlmProvider for OpenRouterAdapter {
 
         let response = builder
             .send()
+            .await
             .and_then(|resp| resp.error_for_status())
             .map_err(|err| Self::map_error(err.to_string()))?;
 
         let body: OpenRouterResponse = response
             .json()
+            .await
             .map_err(|err| Self::map_error(err.to_string()))?;
 
         let text = body

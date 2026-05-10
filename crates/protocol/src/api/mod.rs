@@ -211,4 +211,6 @@ pub struct TestResponse {
     pub provider: String,
     pub success: bool,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
 }

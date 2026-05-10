@@ -1,4 +1,5 @@
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::{LlmProvider, LlmRequest, LlmResponse};
@@ -42,31 +43,38 @@ impl OllamaAdapter {
     }
 }
 
+#[async_trait]
 impl LlmProvider for OllamaAdapter {
-    fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
+    async fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
         let response = match self.mode {
             OllamaMode::Native => {
                 let payload = OllamaNativeRequest::from_prompt(&self.model, &request.prompt);
-                self.client
+                let resp = self
+                    .client
                     .post(self.endpoint())
                     .json(&payload)
                     .send()
-                    .and_then(|resp| resp.error_for_status())
-                    .map_err(|err| Self::map_error(err.to_string()))?
-                    .json::<OllamaNativeResponse>()
+                    .await
+                    .and_then(|r| r.error_for_status())
+                    .map_err(|err| Self::map_error(err.to_string()))?;
+                resp.json::<OllamaNativeResponse>()
+                    .await
                     .map_err(|err| Self::map_error(err.to_string()))?
                     .message
                     .content
             }
             OllamaMode::OpenAICompatible => {
                 let payload = OllamaOpenAIRequest::from_prompt(&self.model, &request.prompt);
-                self.client
+                let resp = self
+                    .client
                     .post(self.endpoint())
                     .json(&payload)
                     .send()
-                    .and_then(|resp| resp.error_for_status())
-                    .map_err(|err| Self::map_error(err.to_string()))?
-                    .json::<OllamaOpenAIResponse>()
+                    .await
+                    .and_then(|r| r.error_for_status())
+                    .map_err(|err| Self::map_error(err.to_string()))?;
+                resp.json::<OllamaOpenAIResponse>()
+                    .await
                     .map_err(|err| Self::map_error(err.to_string()))?
                     .choices
                     .into_iter()

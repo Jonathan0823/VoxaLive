@@ -1,4 +1,5 @@
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::{LlmProvider, LlmRequest, LlmResponse};
@@ -32,8 +33,9 @@ impl GeminiAdapter {
     }
 }
 
+#[async_trait]
 impl LlmProvider for GeminiAdapter {
-    fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
+    async fn generate(&self, request: LlmRequest) -> Result<LlmResponse, CoreError> {
         let payload = GeminiRequest::from_prompt(&request.prompt);
         let response = self
             .client
@@ -41,11 +43,13 @@ impl LlmProvider for GeminiAdapter {
             .header("x-goog-api-key", &self.api_key)
             .json(&payload)
             .send()
+            .await
             .and_then(|resp| resp.error_for_status())
             .map_err(|err| Self::map_error(err.to_string()))?;
 
         let body: GeminiResponse = response
             .json()
+            .await
             .map_err(|err| Self::map_error(err.to_string()))?;
 
         let text = body

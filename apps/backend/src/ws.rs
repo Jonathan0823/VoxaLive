@@ -71,34 +71,38 @@ async fn handle_socket(
                         // Get providers from state (brief lock)
                         let (llm_provider, tts_provider, vts_adapter) = {
                             let state = state.lock().await;
-                            let llm = state.providers.llm_provider(&state.config).ok();
+                            let llm = state.providers.llm_provider(&state.config).await.ok();
                             let tts = state.providers.tts_provider(&state.config).ok();
                             let vts = state.providers.vts_adapter(&state.config);
                             (llm, tts, vts)
                         };
-                        
-                        // Process with providers in blocking context
-                        let result = tokio::task::spawn_blocking(move || -> Option<(String, Vec<u8>, String)> {
-                            // Call LLM
+
+                        // Process with providers asynchronously
+                        // LLM is async, TTS is still blocking
+                        let result: Option<(String, Vec<u8>, String)> = async {
                             let llm_response = match llm_provider {
                                 Some(provider) => provider.generate(voxalive_providers::llm::domain::LlmRequest {
                                     prompt: input.text.clone(),
                                     provider: None,
-                                }).ok(),
+                                }).await.ok(),
                                 None => None,
                             }?;
-                            
-                            // Call TTS
+
                             let tts_response = match tts_provider {
-                                Some(provider) => provider.synthesize(voxalive_providers::tts::domain::TtsRequest {
-                                    text: llm_response.text.clone(),
-                                    provider: None,
-                                }).ok(),
+                                Some(provider) => {
+                                    let text = llm_response.text.clone();
+                                    tokio::task::spawn_blocking(move || {
+                                        provider.synthesize(voxalive_providers::tts::domain::TtsRequest {
+                                            text,
+                                            provider: None,
+                                        })
+                                    }).await.ok().and_then(|r| r.ok())
+                                }
                                 None => None,
                             }?;
-                            
+
                             Some((llm_response.text, tts_response.audio_bytes, tts_response.audio_format))
-                        }).await.ok().flatten();
+                        }.await;
                         
                         // Send audio to VTS adapter
                         if let Some((ref _text, ref audio_bytes, ref audio_format)) = result {
