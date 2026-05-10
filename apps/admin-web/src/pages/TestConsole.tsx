@@ -254,8 +254,8 @@ const TestConsole: React.FC = () => {
             <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
               <div>
                 <dt className="text-gray-500">Connected</dt>
-                <dd className={`font-medium ${vtsResult.connected ? 'text-green-600' : 'text-red-600'}`}>
-                  {vtsResult.connected ? 'Yes' : 'No'}
+                <dd className={`font-medium ${vtsResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {vtsResult.success ? 'Yes' : 'No'}
                 </dd>
               </div>
               <div>

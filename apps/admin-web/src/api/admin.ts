@@ -105,12 +105,15 @@ export const getSecretStatus = async (): Promise<SecretStatusData> => {
 };
 
 export const putSecrets = async (secrets: Record<string, string>): Promise<string[]> => {
-  const response = await apiFetch<{ data: { updated: string[] } }>('/api/secrets', {
+  const response = await apiFetch<SecretUpdateResponse>('/api/secrets', {
     method: 'PUT',
     body: JSON.stringify(secrets),
   });
-  return unwrap(response).data.updated;
+  return unwrap(response).updated;
 };
+
+/// Alias for internal use.
+type SecretUpdateResponse = { updated: string[] };
 
 // ========== Provider Tests ==========
 
@@ -138,30 +141,32 @@ export interface TtsTestResponse {
 }
 
 export interface VtsTestResponse {
-  connected: boolean;
-  latency_ms: number;
+  provider: string;
+  success: boolean;
+  message: string;
+  latency_ms?: number;
 }
 
 export const testLlm = async (req: LlmTestRequest): Promise<LlmTestResponse> => {
-  const response = await apiFetch<{ data: LlmTestResponse }>('/api/test/llm', {
+  const response = await apiFetch<LlmTestResponse>('/api/test/llm', {
     method: 'POST',
     body: JSON.stringify(req),
   });
-  return unwrap(response).data;
+  return unwrap(response);
 };
 
 export const testTts = async (req: TtsTestRequest): Promise<TtsTestResponse> => {
-  const response = await apiFetch<{ data: TtsTestResponse }>('/api/test/tts', {
+  const response = await apiFetch<TtsTestResponse>('/api/test/tts', {
     method: 'POST',
     body: JSON.stringify(req),
   });
-  return unwrap(response).data;
+  return unwrap(response);
 };
 
 export const testVts = async (): Promise<VtsTestResponse> => {
-  const response = await apiFetch<{ data: VtsTestResponse }>('/api/test/vts', {
+  const response = await apiFetch<VtsTestResponse>('/api/test/vts', {
     method: 'POST',
     body: '{}',
   });
-  return unwrap(response).data;
+  return unwrap(response);
 };
