@@ -32,7 +32,8 @@ async fn main() {
 
     // Initialize config
     let runtime = RuntimeConfig::default();
-    let config = ConfigManager::new(runtime).unwrap_or_else(|_| ConfigManager::default());
+    let mut config = ConfigManager::new(runtime).unwrap_or_else(|_| ConfigManager::default());
+    config.set_admin_token_from_env();
     let state = Arc::new(Mutex::new(state::AppState::new(config)));
 
     // Build router with admin auth on protected routes

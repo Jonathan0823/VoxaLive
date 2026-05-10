@@ -85,6 +85,20 @@ impl ConfigManager {
     pub fn get_status(&self) -> String {
         serde_json::to_string(&self.secrets.status()).unwrap_or_default()
     }
+
+    /// Set admin token from environment (called at startup).
+    pub fn set_admin_token_from_env(&mut self) {
+        if let Ok(token) = std::env::var("ADMIN_TOKEN") {
+            if !token.is_empty() {
+                self.secrets.update(SecretUpdateRequest {
+                    admin_token: Some(token),
+                    gemini_api_key: None,
+                    openrouter_api_key: None,
+                    vts_auth_token: None,
+                });
+            }
+        }
+    }
 }
 
 /// Owns secret values and returns safe status only.
