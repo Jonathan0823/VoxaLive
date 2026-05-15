@@ -8,6 +8,7 @@
 export type ServerMessageType =
   | 'connection.ready'
   | 'response.text'
+  | 'response.transcript'
   | 'response.audio.start'
   | 'response.audio.end'
   | 'response.visemes'
@@ -25,6 +26,24 @@ export interface ResponseText {
   v: number;
   request_id: string;
   text: string;
+}
+
+export interface ResponseTranscript {
+  type: 'response.transcript';
+  v: number;
+  request_id: string;
+  transcript: string;
+  language?: string | null;
+}
+
+export interface InputAudioStart {
+  type: 'input.audio.start';
+  v: number;
+  request_id: string;
+  format: string;
+  sample_rate: number;
+  channels: number;
+  language?: string | null;
 }
 
 export interface ResponseAudioStart {
@@ -66,6 +85,7 @@ export interface WebSocketError {
 export type ServerMessage =
   | ConnectionReady
   | ResponseText
+  | ResponseTranscript
   | ResponseAudioStart
   | ResponseAudioEnd
   | ResponseVisemes

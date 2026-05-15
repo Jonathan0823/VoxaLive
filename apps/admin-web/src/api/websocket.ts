@@ -31,6 +31,7 @@ export interface InputAudioStartMessage {
   format: string;
   sample_rate: number;
   channels: number;
+  language?: string | null;
 }
 
 export interface InputAudioEndMessage {
@@ -171,7 +172,7 @@ export class WebSocketClient {
   }
 
   /** Signal audio input start */
-  sendAudioStart(): string {
+  sendAudioStart(language?: string | null): string {
     const requestId = this.generateRequestId();
     const message: InputAudioStartMessage = {
       v: PROTOCOL_VERSION,
@@ -180,6 +181,7 @@ export class WebSocketClient {
       format: 'pcm16',
       sample_rate: 16000,
       channels: 1,
+      language: language ?? undefined,
     };
     this.sendJson(message);
     return requestId;

@@ -36,6 +36,8 @@ const TestConsole: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [audioTranscript, setAudioTranscript] = useState<string | null>(null);
+  const [assistantReply, setAssistantReply] = useState<string | null>(null);
+  const [sttLanguage, setSttLanguage] = useState<string>('auto');
   const [wsConnected, setWsConnected] = useState(false);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const recordedAudioUrlRef = useRef<string | null>(null);
@@ -137,8 +139,10 @@ const TestConsole: React.FC = () => {
       },
       onMessage: (message: ServerMessage) => {
         console.log('[TestConsole] WS message:', message);
-        if (message.type === 'response.text') {
-          setAudioTranscript(message.text);
+        if (message.type === 'response.transcript') {
+          setAudioTranscript(message.transcript);
+        } else if (message.type === 'response.text') {
+          setAssistantReply(message.text);
         } else if (message.type === 'error') {
           setAudioError(message.message);
         }
@@ -189,6 +193,7 @@ const TestConsole: React.FC = () => {
   const startRecording = useCallback(async () => {
     setAudioError(null);
     setAudioTranscript(null);
+    setAssistantReply(null);
     audioChunksRef.current = [];
 
     try {
@@ -224,7 +229,7 @@ const TestConsole: React.FC = () => {
 
       // Send audio start message
       if (wsClientRef.current?.isConnected()) {
-        currentRequestIdRef.current = wsClientRef.current.sendAudioStart();
+        currentRequestIdRef.current = wsClientRef.current.sendAudioStart(sttLanguage);
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -578,6 +583,37 @@ const TestConsole: React.FC = () => {
             <p className="text-gray-800 mt-1">{audioTranscript}</p>
           </div>
         )}
+
+        {assistantReply && (
+          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-md">
+            <p className="text-purple-700 font-medium">Assistant Reply</p>
+            <p className="text-gray-800 mt-1">{assistantReply}</p>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <label htmlFor="stt-language" className="block text-sm font-medium text-gray-700 mb-1">
+            STT Language
+          </label>
+          <select
+            id="stt-language"
+            value={sttLanguage}
+            onChange={(e) => setSttLanguage(e.target.value)}
+            className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          >
+            <option value="auto">Auto-detect</option>
+            <option value="en">English</option>
+            <option value="id">Indonesian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+          </select>
+          <p className="mt-1 text-sm text-gray-500">
+            Whisper uses auto-detect by default; choose a language only if you want to force it.
+          </p>
+        </div>
 
         <div className="flex items-center gap-4">
           {!isRecording ? (
