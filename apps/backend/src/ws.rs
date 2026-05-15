@@ -15,7 +15,7 @@ use tracing::info;
 
 use voxalive_protocol::ws::{
     ClientMessage, ConnectionReady,
-    ResponseText, ServerMessage, WebSocketError,
+    ResponseText, ResponseTranscript, ServerMessage, WebSocketError,
     PROTOCOL_VERSION,
 };
 use voxalive_providers::frontend::{FrontendAdapter, FrontendOutput};
@@ -51,8 +51,8 @@ async fn handle_socket(
     info!("WS connected, frontend={}", frontend);
     let session_id = uuid::Uuid::new_v4().to_string();
 
-    // Audio buffer for accumulating chunks between InputAudioStart and InputAudioEnd
-    let mut audio_buffer: Option<Vec<u8>> = None;
+    // Audio buffer and language for accumulating chunks between InputAudioStart and InputAudioEnd
+    let mut audio_buffer: Option<(Vec<u8>, Option<String>)> = None;
 
     // Send connection.ready
     let ready = ServerMessage::ConnectionReady(ConnectionReady {
@@ -134,7 +134,7 @@ async fn handle_socket(
                     Ok(ClientMessage::InputAudioStart(start)) => {
                         info!("WS input.audio.start: {}", start.request_id);
                         // Start buffering audio - initialize the buffer
-                        audio_buffer = Some(Vec::new());
+                        audio_buffer = Some((Vec::new(), start.language));
                     }
                     Ok(ClientMessage::InputAudioEnd(end)) => {
                         info!("WS input.audio.end: {}", end.request_id);
@@ -142,7 +142,7 @@ async fn handle_socket(
                         // Take the buffered audio and reset buffer
                         let buffered_audio = audio_buffer.take();
 
-                        if let Some(audio_bytes) = buffered_audio {
+                        if let Some((audio_bytes, language)) = buffered_audio {
                             if audio_bytes.is_empty() {
                                 // Send error for empty audio
                                 let error = ServerMessage::Error(WebSocketError {
@@ -169,6 +169,8 @@ async fn handle_socket(
                             };
 
                             // Run STT transcription (blocking)
+                            let selected_language = language.clone();
+
                             let stt_result: Result<SttResponse, String> = async {
                                 let provider = stt_provider.ok_or("STT provider not configured")?;
                                 let request = SttRequest {
@@ -176,6 +178,7 @@ async fn handle_socket(
                                     sample_rate: 16000,
                                     channels: 1,
                                     audio_bytes: audio_bytes,
+                                    language: selected_language.clone(),
                                 };
                                 tokio::task::spawn_blocking(move || {
                                     provider.transcribe(request)
@@ -201,6 +204,16 @@ async fn handle_socket(
                             };
 
                             info!("STT transcript: {}", transcript);
+
+                            let transcript_message = ServerMessage::ResponseTranscript(ResponseTranscript {
+                                v: PROTOCOL_VERSION,
+                                request_id: end.request_id.clone(),
+                                transcript: transcript.clone(),
+                                language: selected_language,
+                            });
+                            if let Ok(json) = serde_json::to_string(&transcript_message) {
+                                let _ = socket.send(Message::Text(json.into())).await;
+                            }
 
                             // Reuse the existing LLM → TTS → VTS flow with the transcript
                             // Get providers again (brief lock)
@@ -263,12 +276,12 @@ async fn handle_socket(
                             }
                         } else {
                             // No audio buffer - send error
-                            let error = ServerMessage::Error(WebSocketError {
-                                v: PROTOCOL_VERSION,
-                                request_id: Some(end.request_id.clone()),
-                                code: "STT_ERROR".to_string(),
-                                message: "No audio buffer found. Did you send InputAudioStart first?".to_string(),
-                            });
+                                let error = ServerMessage::Error(WebSocketError {
+                                    v: PROTOCOL_VERSION,
+                                    request_id: Some(end.request_id.clone()),
+                                    code: "STT_ERROR".to_string(),
+                                    message: "No audio buffer found. Did you send InputAudioStart first?".to_string(),
+                                });
                             if let Ok(json) = serde_json::to_string(&error) {
                                 let _ = socket.send(Message::Text(json.into())).await;
                             }
@@ -290,7 +303,7 @@ async fn handle_socket(
             Ok(Message::Binary(data)) => {
                 // Buffer audio chunks for audio input
                 if let Some(ref mut buffer) = audio_buffer {
-                    buffer.extend_from_slice(&data);
+                    buffer.0.extend_from_slice(&data);
                 }
             }
             Ok(Message::Close(_)) => {

@@ -37,6 +37,8 @@ pub struct InputAudioStart {
     pub format: String,
     pub sample_rate: u32,
     pub channels: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,8 @@ pub enum ServerMessage {
     ConnectionReady(ConnectionReady),
     #[serde(rename = "response.text")]
     ResponseText(ResponseText),
+    #[serde(rename = "response.transcript")]
+    ResponseTranscript(ResponseTranscript),
     #[serde(rename = "response.audio.start")]
     ResponseAudioStart(ResponseAudioStart),
     #[serde(rename = "response.audio.end")]
@@ -76,6 +80,15 @@ pub struct ResponseText {
     pub v: u32,
     pub request_id: String,
     pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseTranscript {
+    pub v: u32,
+    pub request_id: String,
+    pub transcript: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

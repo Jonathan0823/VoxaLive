@@ -48,7 +48,11 @@ impl SttProvider for WhisperAdapter {
             .map_err(|err| Self::map_error(err.to_string()))?;
 
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        params.set_language(Some("en"));
+        if let Some(language) = request.language.as_deref() {
+            if !language.is_empty() && language != "auto" {
+                params.set_language(Some(language));
+            }
+        }
         params.set_print_progress(false);
 
         let audio_data = Self::decode_pcm16_le(&request.audio_bytes);

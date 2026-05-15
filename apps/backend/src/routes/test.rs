@@ -82,6 +82,7 @@ pub async fn test_stt(
         sample_rate: 16_000,
         channels: 1,
         audio_bytes,
+        language: Some("auto".to_string()),
     }) {
         Ok(response) => (
             StatusCode::OK,

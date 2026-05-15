@@ -9,6 +9,8 @@ pub struct SttRequest {
     pub sample_rate: u32,
     pub channels: u32,
     pub audio_bytes: Vec<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// STT response payload.
