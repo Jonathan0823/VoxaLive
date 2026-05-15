@@ -285,10 +285,13 @@ Tests the active or selected TTS provider.
   "data": {
     "provider": "piper",
     "latency_ms": 250,
-    "audio_format": "wav"
+    "audio_format": "wav",
+    "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA..."
   }
 }
 ~~~
+
+**Note:** The `audio_base64` field contains base64-encoded WAV audio data that can be played in the browser via the Test Console. On failure or if audio is unavailable, this field is omitted.
 
 ## POST /api/test/vts
 
