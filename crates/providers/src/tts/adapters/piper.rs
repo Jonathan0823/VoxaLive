@@ -26,11 +26,17 @@ impl PiperAdapter {
 
 impl TtsProvider for PiperAdapter {
     fn synthesize(&self, request: TtsRequest) -> Result<TtsResponse, CoreError> {
+        // Use a fixed output file path - piper writes here when ffplay is unavailable
+        let output_file = "output.wav";
+
         let mut child = Command::new(&self.executable)
             .arg("-m")
             .arg(&self.model_path)
+            .arg("-f")
+            .arg(output_file)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|err| Self::map_error(err.to_string()))?;
 
@@ -51,9 +57,16 @@ impl TtsProvider for PiperAdapter {
             )));
         }
 
+        // Read the audio from the output file
+        let audio_bytes = std::fs::read(output_file)
+            .map_err(|err| Self::map_error(format!("failed to read output file: {}", err)))?;
+
+        // Clean up the output file
+        let _ = std::fs::remove_file(output_file);
+
         Ok(TtsResponse {
             audio_format: "wav".to_string(),
-            audio_bytes: output.stdout,
+            audio_bytes,
         })
     }
 }
