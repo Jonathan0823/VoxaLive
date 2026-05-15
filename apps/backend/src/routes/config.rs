@@ -88,6 +88,7 @@ pub async fn update_config(
                 )
             }
         };
+        runtime.stt.model_path = stt.model_path;
     }
     if let Some(live) = patch.live {
         runtime.live.enabled = live.enabled;

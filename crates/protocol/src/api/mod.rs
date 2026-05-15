@@ -94,6 +94,8 @@ pub struct TtsConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
     pub device: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_path: Option<String>,
 }
 
 /// Live input config for API contract.

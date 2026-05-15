@@ -34,6 +34,7 @@ export interface TtsConfig {
 
 export interface SttConfig {
   device: string;
+  model_path?: string;
 }
 
 export interface LiveConfig {
