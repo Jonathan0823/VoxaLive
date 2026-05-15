@@ -212,6 +212,9 @@ pub struct TtsTestResponse {
     pub provider: String,
     pub latency_ms: u64,
     pub audio_format: String,
+    /// Base64-encoded audio data for playback in the test console.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_base64: Option<String>,
 }
 
 /// Generic test response for simple provider tests.

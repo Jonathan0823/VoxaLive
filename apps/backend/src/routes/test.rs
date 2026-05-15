@@ -1,6 +1,7 @@
 //! Provider test endpoints.
 
 use axum::{extract::State, http::StatusCode, Json};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
@@ -57,6 +58,7 @@ pub async fn test_tts(
                 provider: format!("{:?}", state.config.runtime_config().tts.provider),
                 latency_ms: start.elapsed().as_millis() as u64,
                 audio_format: response.audio_format,
+                audio_base64: Some(STANDARD.encode(&response.audio_bytes)),
             })),
         ),
         Err(err) => (StatusCode::BAD_GATEWAY, Json(ApiResponse::<TtsTestResponse>::error("PROVIDER_TEST_FAILED", &err.to_string()))),
