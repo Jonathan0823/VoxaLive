@@ -260,3 +260,23 @@ Initial version:
 ~~~
 
 Breaking protocol changes must increment the version and update this document.
+
+## Voice Input User Notes
+
+### Microphone Permission
+
+When using voice input (push-to-talk), the browser will request microphone access. If permission is denied, the client will display an error message: "Microphone permission denied. Please allow microphone access in your browser settings."
+
+To grant permission:
+- Click the microphone icon or push-to-talk button
+- When prompted, allow microphone access
+- Refresh the page if permission was previously denied
+
+### Push-to-Talk Flow
+
+1. **Start Recording**: Press and hold the push-to-talk button. The button will turn red and pulse while recording.
+2. **Speak**: Release the button when finished speaking.
+3. **Processing**: Audio is converted to PCM16 format (16kHz, mono) and sent to the backend for transcription.
+4. **Response**: The transcript is sent to the LLM, and the response is synthesized to audio and sent back with visemes for lip-sync.
+
+The text input path remains available and independent of voice input.
