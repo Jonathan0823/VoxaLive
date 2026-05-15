@@ -68,7 +68,8 @@ sequenceDiagram
   "request_id": "uuid",
   "format": "pcm16",
   "sample_rate": 16000,
-  "channels": 1
+  "channels": 1,
+  "language": "auto"
 }
 ~~~
 
@@ -111,6 +112,18 @@ mono
   "type": "response.text",
   "request_id": "uuid",
   "text": "Hello, how can I help?"
+}
+~~~
+
+## Server to Client: Transcript
+
+~~~json
+{
+  "v": 1,
+  "type": "response.transcript",
+  "request_id": "uuid",
+  "transcript": "Hello world",
+  "language": "en"
 }
 ~~~
 
