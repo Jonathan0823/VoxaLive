@@ -141,7 +141,8 @@ Must not include raw secrets.
       "model_path": "./voices/default.onnx"
     },
     "stt": {
-      "device": "cpu"
+      "device": "cpu",
+      "model_path": "./models/whisper.bin"
     },
     "live": {
       "youtube_video_id": "",

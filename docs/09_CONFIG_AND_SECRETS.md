@@ -249,7 +249,8 @@ SECRETS_FILE=data/secrets.enc
     "model_path": "./voices/default.onnx"
   },
   "stt": {
-    "device": "cpu"
+    "device": "cpu",
+    "model_path": "./models/whisper.bin"
   },
   "live": {
     "enabled": false,
@@ -277,6 +278,8 @@ SECRETS_FILE=data/secrets.enc
 ### STT
 
 - device must be one of: `cpu`, `cuda:0`, `auto`
+- model_path should point to a Whisper `.bin` model file
+- larger models improve Indonesian recognition; tiny models may be inaccurate for non-English speech
 
 ### Live Inputs
 
