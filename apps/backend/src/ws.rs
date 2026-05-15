@@ -19,6 +19,7 @@ use voxalive_protocol::ws::{
     PROTOCOL_VERSION,
 };
 use voxalive_providers::frontend::{FrontendAdapter, FrontendOutput};
+use voxalive_providers::stt::{SttRequest, SttResponse};
 
 use crate::state::AppState;
 
@@ -50,6 +51,9 @@ async fn handle_socket(
     info!("WS connected, frontend={}", frontend);
     let session_id = uuid::Uuid::new_v4().to_string();
 
+    // Audio buffer for accumulating chunks between InputAudioStart and InputAudioEnd
+    let mut audio_buffer: Option<Vec<u8>> = None;
+
     // Send connection.ready
     let ready = ServerMessage::ConnectionReady(ConnectionReady {
         v: PROTOCOL_VERSION,
@@ -67,7 +71,7 @@ async fn handle_socket(
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(ClientMessage::InputText(input)) => {
                         info!("WS input.text: {}", input.text);
-                        
+
                         // Get providers from state (brief lock)
                         let (llm_provider, tts_provider, vts_adapter) = {
                             let state = state.lock().await;
@@ -103,7 +107,7 @@ async fn handle_socket(
 
                             Some((llm_response.text, tts_response.audio_bytes, tts_response.audio_format))
                         }.await;
-                        
+
                         // Send audio to VTS adapter
                         if let Some((ref _text, ref audio_bytes, ref audio_format)) = result {
                             let output = FrontendOutput {
@@ -114,7 +118,7 @@ async fn handle_socket(
                             };
                             let _ = vts_adapter.send_output(output);
                         }
-                        
+
                         // Send text response back to client
                         let response = ServerMessage::ResponseText(ResponseText {
                             v: PROTOCOL_VERSION,
@@ -129,11 +133,146 @@ async fn handle_socket(
                     }
                     Ok(ClientMessage::InputAudioStart(start)) => {
                         info!("WS input.audio.start: {}", start.request_id);
-                        // TODO: Start buffering audio
+                        // Start buffering audio - initialize the buffer
+                        audio_buffer = Some(Vec::new());
                     }
                     Ok(ClientMessage::InputAudioEnd(end)) => {
                         info!("WS input.audio.end: {}", end.request_id);
-                        // TODO: Process buffered audio through STT → LLM → TTS → VTS
+
+                        // Take the buffered audio and reset buffer
+                        let buffered_audio = audio_buffer.take();
+
+                        if let Some(audio_bytes) = buffered_audio {
+                            if audio_bytes.is_empty() {
+                                // Send error for empty audio
+                                let error = ServerMessage::Error(WebSocketError {
+                                    v: PROTOCOL_VERSION,
+                                    request_id: Some(end.request_id.clone()),
+                                    code: "STT_ERROR".to_string(),
+                                    message: "No audio data received".to_string(),
+                                });
+                                if let Ok(json) = serde_json::to_string(&error) {
+                                    let _ = socket.send(Message::Text(json.into())).await;
+                                }
+                                continue;
+                            }
+
+                            // Process audio through STT → LLM → TTS → VTS pipeline
+                            // Get providers from state (brief lock)
+                            let (stt_provider, llm_provider, tts_provider, vts_adapter) = {
+                                let state = state.lock().await;
+                                let stt = state.providers.stt_provider(&state.config).ok();
+                                let llm = state.providers.llm_provider(&state.config).await.ok();
+                                let tts = state.providers.tts_provider(&state.config).ok();
+                                let vts = state.providers.vts_adapter(&state.config);
+                                (stt, llm, tts, vts)
+                            };
+
+                            // Run STT transcription (blocking)
+                            let stt_result: Result<SttResponse, String> = async {
+                                let provider = stt_provider.ok_or("STT provider not configured")?;
+                                let request = SttRequest {
+                                    audio_format: "pcm16".to_string(),
+                                    sample_rate: 16000,
+                                    channels: 1,
+                                    audio_bytes: audio_bytes,
+                                };
+                                tokio::task::spawn_blocking(move || {
+                                    provider.transcribe(request)
+                                }).await.map_err(|e| e.to_string())?.map_err(|e| e.message)
+                            }.await;
+
+                            // Handle STT result
+                            let transcript = match stt_result {
+                                Ok(response) => response.transcript,
+                                Err(e) => {
+                                    // Send STT error back to client
+                                    let error = ServerMessage::Error(WebSocketError {
+                                        v: PROTOCOL_VERSION,
+                                        request_id: Some(end.request_id.clone()),
+                                        code: "STT_ERROR".to_string(),
+                                        message: format!("Transcription failed: {}", e),
+                                    });
+                                    if let Ok(json) = serde_json::to_string(&error) {
+                                        let _ = socket.send(Message::Text(json.into())).await;
+                                    }
+                                    continue;
+                                }
+                            };
+
+                            info!("STT transcript: {}", transcript);
+
+                            // Reuse the existing LLM → TTS → VTS flow with the transcript
+                            // Get providers again (brief lock)
+                            let (llm_provider, tts_provider, vts_adapter) = {
+                                let state = state.lock().await;
+                                let llm = state.providers.llm_provider(&state.config).await.ok();
+                                let tts = state.providers.tts_provider(&state.config).ok();
+                                let vts = state.providers.vts_adapter(&state.config);
+                                (llm, tts, vts)
+                            };
+
+                            // Process with providers asynchronously
+                            // LLM is async, TTS is still blocking
+                            let result: Option<(String, Vec<u8>, String)> = async {
+                                let llm_response = match llm_provider {
+                                    Some(provider) => provider.generate(voxalive_providers::llm::domain::LlmRequest {
+                                        prompt: transcript.clone(),
+                                        provider: None,
+                                    }).await.ok(),
+                                    None => None,
+                                }?;
+
+                                let tts_response = match tts_provider {
+                                    Some(provider) => {
+                                        let text = llm_response.text.clone();
+                                        tokio::task::spawn_blocking(move || {
+                                            provider.synthesize(voxalive_providers::tts::domain::TtsRequest {
+                                                text,
+                                                provider: None,
+                                            })
+                                        }).await.ok().and_then(|r| r.ok())
+                                    }
+                                    None => None,
+                                }?;
+
+                                Some((llm_response.text, tts_response.audio_bytes, tts_response.audio_format))
+                            }.await;
+
+                            // Send audio to VTS adapter
+                            if let Some((ref _text, ref audio_bytes, ref audio_format)) = result {
+                                let output = FrontendOutput {
+                                    request_id: end.request_id.clone(),
+                                    text: None,
+                                    audio_format: Some(audio_format.clone()),
+                                    audio_bytes: Some(audio_bytes.clone()),
+                                };
+                                let _ = vts_adapter.send_output(output);
+                            }
+
+                            // Send text response back to client
+                            let response = ServerMessage::ResponseText(ResponseText {
+                                v: PROTOCOL_VERSION,
+                                request_id: end.request_id,
+                                text: result
+                                    .map(|(text, _, _)| text)
+                                    .unwrap_or_else(|| "Error processing request".to_string()),
+                            });
+                            if let Ok(json) = serde_json::to_string(&response) {
+                                let _ = socket.send(Message::Text(json.into())).await;
+                            }
+                        } else {
+                            // No audio buffer - send error
+                            let error = ServerMessage::Error(WebSocketError {
+                                v: PROTOCOL_VERSION,
+                                request_id: Some(end.request_id.clone()),
+                                code: "STT_ERROR".to_string(),
+                                message: "No audio buffer found. Did you send InputAudioStart first?".to_string(),
+                            });
+                            if let Ok(json) = serde_json::to_string(&error) {
+                                let _ = socket.send(Message::Text(json.into())).await;
+                            }
+                        }
                     }
                     Err(e) => {
                         let error = ServerMessage::Error(WebSocketError {
@@ -148,8 +287,11 @@ async fn handle_socket(
                     }
                 }
             }
-            Ok(Message::Binary(_)) => {
-                // TODO: Buffer audio chunks for audio input
+            Ok(Message::Binary(data)) => {
+                // Buffer audio chunks for audio input
+                if let Some(ref mut buffer) = audio_buffer {
+                    buffer.extend_from_slice(&data);
+                }
             }
             Ok(Message::Close(_)) => {
                 info!("WS closed");
