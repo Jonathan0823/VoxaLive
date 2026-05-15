@@ -143,6 +143,7 @@ export interface TtsTestResponse {
   provider: string;
   latency_ms: number;
   audio_format: string;
+  audio_base64?: string;
 }
 
 export interface VtsTestResponse {

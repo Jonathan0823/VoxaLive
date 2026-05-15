@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { testLlm, testTts, testVts, type LlmTestResponse, type TtsTestResponse, type VtsTestResponse } from '../api/admin';
 
 const LLM_PROVIDERS = ['gemini', 'openrouter', 'ollama'] as const;
@@ -21,6 +21,9 @@ const TestConsole: React.FC = () => {
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsResult, setTtsResult] = useState<TtsTestResponse | null>(null);
   const [ttsError, setTtsError] = useState<string | null>(null);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsAudioError, setTtsAudioError] = useState<string | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
 
   // VTS test state
   const [vtsLoading, setVtsLoading] = useState(false);
@@ -48,10 +51,38 @@ const TestConsole: React.FC = () => {
     setTtsLoading(true);
     setTtsError(null);
     setTtsResult(null);
+    setTtsAudioError(null);
+
+    // Revoke previous audio URL to avoid memory leaks
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+      setTtsAudioUrl(null);
+    }
 
     try {
       const result = await testTts({ text: ttsText, provider: ttsProvider });
       setTtsResult(result);
+
+      // Create audio URL from base64 if present
+      if (result.audio_base64) {
+        try {
+          // Determine MIME type based on audio format
+          const mimeType = result.audio_format === 'wav' ? 'audio/wav' : 'audio/wav';
+          const byteCharacters = atob(result.audio_base64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+          const audioUrl = URL.createObjectURL(blob);
+          audioUrlRef.current = audioUrl;
+          setTtsAudioUrl(audioUrl);
+        } catch (decodeErr) {
+          setTtsAudioError('Failed to decode audio payload');
+        }
+      }
     } catch (err) {
       setTtsError(err instanceof Error ? err.message : 'TTS test failed');
     } finally {
@@ -72,6 +103,15 @@ const TestConsole: React.FC = () => {
     } finally {
       setVtsLoading(false);
     }
+  }, []);
+
+  // Cleanup audio URL on unmount
+  useEffect(() => {
+    return () => {
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -189,6 +229,17 @@ const TestConsole: React.FC = () => {
                 <dd className="text-gray-900">{ttsResult.audio_format}</dd>
               </div>
             </dl>
+            {ttsAudioUrl && (
+              <div className="mt-4">
+                <p className="text-gray-500 text-sm mb-2">Audio Preview</p>
+                <audio controls src={ttsAudioUrl} className="w-full">
+                  Your browser does not support audio playback.
+                </audio>
+              </div>
+            )}
+            {ttsAudioError && (
+              <p className="mt-2 text-sm text-red-600">{ttsAudioError}</p>
+            )}
           </div>
         )}
 
