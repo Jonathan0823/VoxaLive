@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getConfig, patchConfig } from "../api/admin";
-import type { ServerPatchConfig } from "../api/admin";
+import type { ServerPatchConfig, SttConfig } from "../api/admin";
 
 const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -8,6 +8,8 @@ const Settings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [vtsEndpoint, setVtsEndpoint] = useState("");
+  const [sttDevice, setSttDevice] = useState("cpu");
+  const [sttModelPath, setSttModelPath] = useState("./models/whisper.bin");
 
   useEffect(() => {
     let cancelled = false;
@@ -15,6 +17,8 @@ const Settings: React.FC = () => {
       .then((data) => {
         if (!cancelled) {
           setVtsEndpoint(data.server.vts_endpoint);
+          setSttDevice(data.stt.device);
+          setSttModelPath(data.stt.model_path ?? "./models/whisper.bin");
           setLoading(false);
         }
       })
@@ -39,8 +43,11 @@ const Settings: React.FC = () => {
 
     try {
       const patch: ServerPatchConfig = { vts_endpoint: vtsEndpoint };
-      const data = await patchConfig({ server: patch });
+      const sttPatch: SttConfig = { device: sttDevice, model_path: sttModelPath };
+      const data = await patchConfig({ server: patch, stt: sttPatch });
       setVtsEndpoint(data.server.vts_endpoint);
+      setSttDevice(data.stt.device);
+      setSttModelPath(data.stt.model_path ?? "./models/whisper.bin");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -91,6 +98,47 @@ const Settings: React.FC = () => {
         className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200"
       >
         <div>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">STT Settings</h2>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="stt_device" className="block text-sm font-medium text-gray-700 mb-1">
+                STT Device
+              </label>
+              <select
+                id="stt_device"
+                value={sttDevice}
+                onChange={(e) => setSttDevice(e.target.value)}
+                className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="cpu">CPU</option>
+                <option value="cuda:0">CUDA 0</option>
+                <option value="auto">Auto</option>
+              </select>
+              <p className="mt-1 text-sm text-gray-500">
+                Device used by Whisper during transcription.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="stt_model_path" className="block text-sm font-medium text-gray-700 mb-1">
+                Whisper Model Path
+              </label>
+              <input
+                type="text"
+                id="stt_model_path"
+                value={sttModelPath}
+                onChange={(e) => setSttModelPath(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="./models/whisper.bin"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Use a larger Whisper model for better Indonesian support (for example, base or small).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
           <label
             htmlFor="vts_endpoint"
             className="block text-sm font-medium text-gray-700 mb-1"
@@ -134,4 +182,3 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
-
