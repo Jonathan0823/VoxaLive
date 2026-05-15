@@ -114,7 +114,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             admin_ui_enabled: true,
-            vts_endpoint: "ws://0.0.0.0:8001".to_string(),
+            vts_endpoint: "ws://127.0.0.1:8001".to_string(),
             vts_plugin_name: "VoxaLive".to_string(),
             vts_plugin_developer: "VoxaLive".to_string(),
         }
