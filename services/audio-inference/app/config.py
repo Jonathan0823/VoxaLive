@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from enum import Enum
 from pydantic import BaseModel, field_validator
 
@@ -21,7 +22,8 @@ class AudioServiceConfig(BaseModel):
     stt_model: str = os.getenv("STT_MODEL", "base")
     stt_device_override: str | None = os.getenv("STT_DEVICE_OVERRIDE")
 
-    tts_model: str = os.getenv("TTS_MODEL", "qwen3-tts")
+    tts_model: str = os.getenv("TTS_MODEL", "piper")
+    tts_model_path: str = os.getenv("TTS_MODEL_PATH", str(Path(__file__).resolve().parent.parent.parent.parent / "voices" / "default.onnx"))
     tts_voice: str = os.getenv("TTS_VOICE", "default")
 
     @field_validator("inference_mode", mode="before")

@@ -14,11 +14,11 @@ requests>=2.31.0
 # STT - Whisper (using faster-whisper with CTranslate2)
 faster-whisper>=1.0.0
 
-# TTS - Qwen3-TTS (placeholder - install when ready)
-# qwen-tts>=0.1.0
+# TTS - Piper (used as the default TTS engine)
+piper-tts>=1.4.0
 
-# TTS - Piper (fallback option)
-# piper-tts>=1.0.0
+# TTS - Qwen3-TTS (install when ready for higher quality voices)
+# qwen-tts>=0.1.0
 
 # Optional: for better performance
 # torch>=2.0.0
