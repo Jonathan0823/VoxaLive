@@ -285,11 +285,12 @@ To grant permission:
 - When prompted, allow microphone access
 - Refresh the page if permission was previously denied
 
-### Push-to-Talk Flow
+### Voice Capture Flow
 
-1. **Start Recording**: Press and hold the push-to-talk button. The button will turn red and pulse while recording.
-2. **Speak**: Release the button when finished speaking.
-3. **Processing**: Audio is converted to PCM16 format (16kHz, mono) and sent to the backend for transcription.
-4. **Response**: The transcript is sent to the LLM, and the response is synthesized to audio and sent back with visemes for lip-sync.
+1. **Start Recording**: The client starts audio capture from a user action such as clicking Record or pressing a hotkey.
+2. **Speak**: The client may keep recording until the user stops manually or until VAD/endpointing detects trailing silence.
+3. **Endpointing**: Recommended clients send `input.audio.end` after roughly 500-1000ms of silence, with a maximum utterance cap as a fallback.
+4. **Processing**: Audio is converted to PCM16 format (16kHz, mono) and sent to the backend for transcription.
+5. **Response**: The transcript is sent to the LLM, and the response is synthesized to audio and sent back with visemes for lip-sync.
 
 The text input path remains available and independent of voice input.

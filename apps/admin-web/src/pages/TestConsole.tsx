@@ -6,6 +6,12 @@ import type { ServerMessage } from '../api/types';
 const LLM_PROVIDERS = ['gemini', 'openrouter', 'ollama'] as const;
 const TTS_PROVIDERS = ['piper', 'qwen'] as const;
 
+const VAD_SAMPLE_INTERVAL_MS = 100;
+const VAD_RMS_THRESHOLD = 0.02;
+const VAD_MIN_SPEECH_MS = 300;
+const VAD_SILENCE_STOP_MS = 900;
+const VAD_MAX_RECORDING_MS = 15000;
+
 type LlmProvider = (typeof LLM_PROVIDERS)[number];
 type TtsProvider = (typeof TTS_PROVIDERS)[number];
 
@@ -46,6 +52,14 @@ const TestConsole: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const currentRequestIdRef = useRef<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadTimerRef = useRef<number | null>(null);
+  const recordingStartedAtRef = useRef<number>(0);
+  const lastSpeechAtRef = useRef<number>(0);
+  const speechDetectedRef = useRef(false);
+  const stoppingRef = useRef(false);
+  const stopRecordingRef = useRef<(() => Promise<void>) | null>(null);
 
   const handleLlmTest = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +110,7 @@ const TestConsole: React.FC = () => {
           const audioUrl = URL.createObjectURL(blob);
           audioUrlRef.current = audioUrl;
           setTtsAudioUrl(audioUrl);
-        } catch (decodeErr) {
+        } catch {
           setTtsAudioError('Failed to decode audio payload');
         }
       }
@@ -165,28 +179,94 @@ const TestConsole: React.FC = () => {
   const convertToPcm16 = useCallback(async (audioBlob: Blob): Promise<ArrayBuffer> => {
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioContext = new AudioContext();
-    audioContextRef.current = audioContext;
 
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    
-    // Convert to mono and resample to 16kHz
-    const channelData = audioBuffer.getChannelData(0);
-    const targetSampleRate = 16000;
-    const targetLength = Math.round(channelData.length * targetSampleRate / audioBuffer.sampleRate);
-    
-    // Create the PCM16 buffer
-    const pcm16Data = new Int16Array(targetLength);
-    
-    for (let i = 0; i < targetLength; i++) {
-      const sourceIndex = i * audioBuffer.sampleRate / targetSampleRate;
-      const sample = channelData[Math.floor(sourceIndex)];
-      // Clamp to valid int16 range
-      pcm16Data[i] = Math.max(-32768, Math.min(32767, Math.round(sample * 32767)));
+    try {
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Convert to mono and resample to 16kHz
+      const channelData = audioBuffer.getChannelData(0);
+      const targetSampleRate = 16000;
+      const targetLength = Math.round(channelData.length * targetSampleRate / audioBuffer.sampleRate);
+
+      // Create the PCM16 buffer
+      const pcm16Data = new Int16Array(targetLength);
+
+      for (let i = 0; i < targetLength; i++) {
+        const sourceIndex = i * audioBuffer.sampleRate / targetSampleRate;
+        const sample = channelData[Math.floor(sourceIndex)];
+        // Clamp to valid int16 range
+        pcm16Data[i] = Math.max(-32768, Math.min(32767, Math.round(sample * 32767)));
+      }
+
+      // Convert to little-endian bytes
+      const pcm16Bytes = new Uint8Array(pcm16Data.buffer);
+      return pcm16Bytes.buffer;
+    } finally {
+      await audioContext.close();
+    }
+  }, []);
+
+  const clearVadTimer = useCallback(() => {
+    if (vadTimerRef.current !== null) {
+      window.clearInterval(vadTimerRef.current);
+      vadTimerRef.current = null;
+    }
+  }, []);
+
+  const cleanupRecordingResources = useCallback(async () => {
+    clearVadTimer();
+
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
     }
 
-    // Convert to little-endian bytes
-    const pcm16Bytes = new Uint8Array(pcm16Data.buffer);
-    return pcm16Bytes.buffer;
+    if (audioContextRef.current) {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }, [clearVadTimer]);
+
+  const updateVadState = useCallback(() => {
+    const analyser = analyserRef.current;
+    if (!analyser || !mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') {
+      return;
+    }
+
+    const samples = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(samples);
+
+    let sumSquares = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sumSquares += samples[i] * samples[i];
+    }
+
+    const rms = Math.sqrt(sumSquares / samples.length);
+    const now = Date.now();
+    const elapsedMs = now - recordingStartedAtRef.current;
+
+    if (rms >= VAD_RMS_THRESHOLD) {
+      speechDetectedRef.current = true;
+      lastSpeechAtRef.current = now;
+    }
+
+    if (elapsedMs >= VAD_MAX_RECORDING_MS) {
+      void stopRecordingRef.current?.();
+      return;
+    }
+
+    if (
+      speechDetectedRef.current &&
+      elapsedMs >= VAD_MIN_SPEECH_MS &&
+      now - lastSpeechAtRef.current >= VAD_SILENCE_STOP_MS
+    ) {
+      void stopRecordingRef.current?.();
+    }
   }, []);
 
   // Start recording audio
@@ -195,6 +275,8 @@ const TestConsole: React.FC = () => {
     setAudioTranscript(null);
     setAssistantReply(null);
     audioChunksRef.current = [];
+    stoppingRef.current = false;
+    speechDetectedRef.current = false;
 
     try {
       // Initialize WebSocket if not connected
@@ -209,6 +291,18 @@ const TestConsole: React.FC = () => {
           noiseSuppression: true,
         } 
       });
+      streamRef.current = stream;
+
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      await audioContext.resume();
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.4;
+      source.connect(analyser);
+      analyserRef.current = analyser;
 
       // Create MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
@@ -223,15 +317,29 @@ const TestConsole: React.FC = () => {
         }
       };
 
+      mediaRecorder.onstop = () => {
+        clearVadTimer();
+      };
+
       // Start recording
       mediaRecorder.start(100); // Collect data every 100ms
       setIsRecording(true);
+      recordingStartedAtRef.current = Date.now();
+      lastSpeechAtRef.current = recordingStartedAtRef.current;
 
       // Send audio start message
       if (wsClientRef.current?.isConnected()) {
         currentRequestIdRef.current = wsClientRef.current.sendAudioStart(sttLanguage);
       }
+
+      vadTimerRef.current = window.setInterval(updateVadState, VAD_SAMPLE_INTERVAL_MS);
     } catch (err) {
+      await cleanupRecordingResources();
+      audioChunksRef.current = [];
+      currentRequestIdRef.current = null;
+      stoppingRef.current = false;
+      setIsRecording(false);
+
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setAudioError('Microphone permission denied. Please allow microphone access in your browser settings.');
@@ -242,19 +350,25 @@ const TestConsole: React.FC = () => {
         setAudioError('Failed to start recording');
       }
     }
-  }, [initWebSocket]);
+  }, [initWebSocket, sttLanguage, updateVadState, clearVadTimer, cleanupRecordingResources]);
 
   // Stop recording and send audio
   const stopRecording = useCallback(async () => {
+    if (stoppingRef.current) {
+      return;
+    }
+
     if (!mediaRecorderRef.current || !wsClientRef.current?.isConnected()) {
       return;
     }
+
+    stoppingRef.current = true;
 
     const mediaRecorder = mediaRecorderRef.current;
     const client = wsClientRef.current;
     const requestId = currentRequestIdRef.current;
 
-    // Stop recording
+    clearVadTimer();
     mediaRecorder.stop();
     mediaRecorder.stream.getTracks().forEach(track => track.stop());
     setIsRecording(false);
@@ -298,7 +412,19 @@ const TestConsole: React.FC = () => {
 
     mediaRecorderRef.current = null;
     audioChunksRef.current = [];
-  }, [convertToPcm16]);
+    currentRequestIdRef.current = null;
+
+    await cleanupRecordingResources();
+    stoppingRef.current = false;
+  }, [cleanupRecordingResources, clearVadTimer, convertToPcm16]);
+
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+
+    return () => {
+      stopRecordingRef.current = null;
+    };
+  }, [stopRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -311,21 +437,14 @@ const TestConsole: React.FC = () => {
       if (recordedAudioUrlRef.current) {
         URL.revokeObjectURL(recordedAudioUrlRef.current);
       }
-      // Stop any ongoing recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-      // Close audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      clearVadTimer();
+      void cleanupRecordingResources();
       // Disconnect WebSocket
       if (wsClientRef.current) {
         wsClientRef.current.disconnect();
       }
     };
-  }, []);
+  }, [cleanupRecordingResources, clearVadTimer]);
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -640,7 +759,9 @@ const TestConsole: React.FC = () => {
             </button>
           )}
           <p className="text-sm text-gray-500">
-            {isRecording ? 'Recording... click Stop to send' : 'Click Record to start, Stop to send'}
+            {isRecording
+              ? 'Recording... auto-stops on silence, or click Stop to send'
+              : 'Click Record to start voice capture'}
           </p>
         </div>
       </section>
