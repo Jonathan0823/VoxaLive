@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getConfig, patchConfig } from '../api/admin';
 import type { LlmConfig, ConfigData } from '../api/admin';
 
@@ -20,30 +20,37 @@ const Providers: React.FC = () => {
     max_tokens: 1024,
   });
 
-  // Load initial config on mount
-  const loadConfig = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getConfig();
-      setConfig(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load configuration');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadConfig = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await getConfig();
+        if (cancelled) {
+          return;
+        }
+
+        setConfig(data);
+        setFormData(data.llm);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load configuration');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
-
-  // Sync form data when config loads
-  useEffect(() => {
-    if (config?.llm) {
-      setFormData(config.llm);
-    }
-  }, [config]);
 
   // Handle form input changes
   const handleInputChange = (

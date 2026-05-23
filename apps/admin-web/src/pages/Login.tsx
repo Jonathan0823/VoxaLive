@@ -25,7 +25,7 @@ const Login: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
       await getConfig();
       // If successful, token is valid
       onLogin();
-    } catch (err) {
+    } catch {
       // Token is invalid
       setAdminToken(null);
       setError('Invalid admin token. Please check your token and try again.');
