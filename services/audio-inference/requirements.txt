@@ -1,0 +1,24 @@
+# Audio Inference Service Dependencies
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Audio processing
+numpy>=1.26.0
+scipy>=1.12.0
+
+# HTTP client (for tests)
+requests>=2.31.0
+
+# STT - Whisper (using faster-whisper with CTranslate2)
+faster-whisper>=1.0.0
+
+# TTS - Qwen3-TTS (placeholder - install when ready)
+# qwen-tts>=0.1.0
+
+# TTS - Piper (fallback option)
+# piper-tts>=1.0.0
+
+# Optional: for better performance
+# torch>=2.0.0
