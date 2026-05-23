@@ -159,7 +159,7 @@ async fn handle_socket(
 
                             // Process audio through STT → LLM → TTS → VTS pipeline
                             // Get providers from state (brief lock)
-                            let (stt_provider, llm_provider, tts_provider, vts_adapter) = {
+                            let (stt_provider, _llm_provider, _tts_provider, _vts_adapter) = {
                                 let state = state.lock().await;
                                 let stt = state.providers.stt_provider(&state.config).ok();
                                 let llm = state.providers.llm_provider(&state.config).await.ok();

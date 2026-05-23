@@ -7,7 +7,7 @@ use voxalive_providers::llm::adapters::{GeminiAdapter, OllamaAdapter, OllamaMode
 use voxalive_providers::llm::LlmProvider;
 use voxalive_providers::stt::adapters::WhisperAdapter;
 use voxalive_providers::stt::SttProvider;
-use voxalive_providers::tts::adapters::PiperAdapter;
+use voxalive_providers::tts::adapters::{AudioServiceTtsAdapter, PiperAdapter};
 use voxalive_providers::tts::TtsProvider;
 
 #[derive(Debug, Default, Clone)]
@@ -51,10 +51,14 @@ impl ProviderFactory {
                 Box::new(PiperAdapter::new("piper", model_path))
             }
             TtsProviderKind::Qwen => {
-                return Err(CoreError::new(
-                    "PROVIDER_NOT_CONFIGURED",
-                    "Qwen TTS adapter is not implemented in this MVP",
-                ));
+                let service_url = runtime.tts.service_url.clone();
+                if service_url.is_empty() {
+                    return Err(CoreError::new(
+                        "PROVIDER_NOT_CONFIGURED",
+                        "TTS service URL not configured",
+                    ));
+                }
+                Box::new(AudioServiceTtsAdapter::new(service_url))
             }
         };
 
@@ -63,12 +67,14 @@ impl ProviderFactory {
 
     pub fn stt_provider(&self, config: &ConfigManager) -> Result<Box<dyn SttProvider>, CoreError> {
         let runtime = config.runtime_config();
-        let model_path = runtime
-            .stt
-            .model_path
-            .clone()
-            .ok_or_else(|| CoreError::new("PROVIDER_NOT_CONFIGURED", "Whisper model path missing"))?;
-        let provider = WhisperAdapter::new(model_path)?;
+        let service_url = runtime.stt.service_url.clone();
+        if service_url.is_empty() {
+            return Err(CoreError::new(
+                "PROVIDER_NOT_CONFIGURED",
+                "STT service URL not configured",
+            ));
+        }
+        let provider = WhisperAdapter::new(service_url);
         Ok(Box::new(provider))
     }
 

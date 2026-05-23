@@ -1,77 +1,143 @@
-use std::path::PathBuf;
+//! Whisper STT adapter that calls external audio-inference service.
+//!
+//! This adapter communicates with the audio-inference service via HTTP.
+//! The service handles Whisper model loading and inference, keeping CUDA
+//! complexity out of the Rust workspace.
+
+use std::sync::OnceLock;
 
 use crate::stt::{SttProvider, SttRequest, SttResponse};
-use voxalive_core::domain::CoreError;
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 
+use voxalive_core::domain::CoreError;
+
+/// Global HTTP client for STT service calls.
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn http_client() -> &'static Client {
+    HTTP_CLIENT.get_or_init(|| Client::new())
+}
+
+/// Whisper adapter that calls external audio-inference service.
 #[derive(Debug)]
 pub struct WhisperAdapter {
-    context: WhisperContext,
+    service_url: String,
+}
+
+#[derive(Serialize)]
+struct TranscribeRequest {
+    audio_format: String,
+    sample_rate: u32,
+    channels: u32,
+    language: Option<String>,
+    audio_data: String, // base64 encoded
+}
+
+#[derive(Deserialize)]
+struct TranscribeResponse {
+    transcript: String,
 }
 
 impl WhisperAdapter {
-    pub fn new(model_path: impl Into<PathBuf>) -> Result<Self, CoreError> {
-        let model_path = model_path.into();
-        let context = WhisperContext::new_with_params(
-            &model_path.to_string_lossy(),
-            WhisperContextParameters::default(),
-        )
-        .map_err(|err| CoreError::new("WHISPER_PROVIDER_ERROR", err.to_string()))?;
-
-        Ok(Self { context })
+    pub fn new(service_url: impl Into<String>) -> Self {
+        Self {
+            service_url: service_url.into(),
+        }
     }
 
     fn map_error(message: impl Into<String>) -> CoreError {
-        CoreError::new("WHISPER_PROVIDER_ERROR", message)
-    }
-
-    fn decode_pcm16_le(audio_bytes: &[u8]) -> Vec<f32> {
-        audio_bytes
-            .chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32)
-            .collect()
+        CoreError::new("STT_SERVICE_ERROR", message)
     }
 }
 
 impl SttProvider for WhisperAdapter {
     fn transcribe(&self, request: SttRequest) -> Result<SttResponse, CoreError> {
-        if request.audio_format != "pcm16" {
+        // Encode audio as base64
+        let audio_data = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &request.audio_bytes,
+        );
+
+        let req = TranscribeRequest {
+            audio_format: request.audio_format,
+            sample_rate: request.sample_rate,
+            channels: request.channels,
+            language: request.language,
+            audio_data,
+        };
+
+        // Make synchronous HTTP call to external service
+        let response = http_client()
+            .post(&format!("{}/stt/transcribe", self.service_url))
+            .json(&req)
+            .send()
+            .map_err(|e| Self::map_error(format!("Failed to call STT service: {}", e)))?;
+
+        if !response.status().is_success() {
             return Err(Self::map_error(format!(
-                "unsupported audio format: {}",
-                request.audio_format
+                "STT service returned error: {}",
+                response.status()
             )));
         }
 
-        let mut state = self
-            .context
-            .create_state()
-            .map_err(|err| Self::map_error(err.to_string()))?;
+        let result: TranscribeResponse = response
+            .json()
+            .map_err(|e| Self::map_error(format!("Failed to parse STT response: {}", e)))?;
 
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        if let Some(language) = request.language.as_deref() {
-            if !language.is_empty() && language != "auto" {
-                params.set_language(Some(language));
-            }
+        Ok(SttResponse { transcript: result.transcript })
+    }
+}
+
+/// Async version of WhisperAdapter for use in async contexts.
+pub struct AsyncWhisperAdapter {
+    service_url: String,
+    client: reqwest::Client,
+}
+
+impl AsyncWhisperAdapter {
+    pub fn new(service_url: impl Into<String>) -> Self {
+        Self {
+            service_url: service_url.into(),
+            client: reqwest::Client::new(),
         }
-        params.set_print_progress(false);
+    }
 
-        let audio_data = Self::decode_pcm16_le(&request.audio_bytes);
-        state
-            .full(params, &audio_data)
-            .map_err(|err| Self::map_error(err.to_string()))?;
+    pub async fn transcribe(&self, request: SttRequest) -> Result<SttResponse, CoreError> {
+        // Encode audio as base64
+        let audio_data = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &request.audio_bytes,
+        );
 
-        let num_segments = state
-            .full_n_segments()
-            .map_err(|err| Self::map_error(err.to_string()))?;
+        let req = TranscribeRequest {
+            audio_format: request.audio_format,
+            sample_rate: request.sample_rate,
+            channels: request.channels,
+            language: request.language,
+            audio_data,
+        };
 
-        let mut transcript = String::new();
-        for i in 0..num_segments {
-            let segment = state
-                .full_get_segment_text(i)
-                .map_err(|err| Self::map_error(err.to_string()))?;
-            transcript.push_str(&segment);
+        let response = self
+            .client
+            .post(&format!("{}/stt/transcribe", self.service_url))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| CoreError::new("STT_SERVICE_ERROR", format!("Failed to call STT service: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(CoreError::new(
+                "STT_SERVICE_ERROR",
+                format!("STT service returned error: {}", response.status()),
+            ));
         }
 
-        Ok(SttResponse { transcript })
+        let result: TranscribeResponse = response
+            .json()
+            .await
+            .map_err(|e| CoreError::new("STT_SERVICE_ERROR", format!("Failed to parse STT response: {}", e)))?;
+
+        Ok(SttResponse { transcript: result.transcript })
     }
 }

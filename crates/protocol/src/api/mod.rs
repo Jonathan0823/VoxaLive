@@ -88,14 +88,13 @@ pub struct TtsConfig {
     pub provider: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_path: Option<String>,
+    pub service_url: String,
 }
 
-/// STT config for API contract (device as string).
+/// STT config for API contract (service URL).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
-    pub device: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_path: Option<String>,
+    pub service_url: String,
 }
 
 /// Live input config for API contract.

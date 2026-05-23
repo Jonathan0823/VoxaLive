@@ -54,6 +54,7 @@ pub struct TtsConfig {
     pub provider: TtsProviderKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_path: Option<String>,
+    pub service_url: String,
 }
 
 impl Default for TtsConfig {
@@ -62,6 +63,7 @@ impl Default for TtsConfig {
             mode: "cpu".to_string(),
             provider: TtsProviderKind::Piper,
             model_path: Some("./voices/default.onnx".to_string()),
+            service_url: "http://127.0.0.1:8002".to_string(),
         }
     }
 }
@@ -69,16 +71,14 @@ impl Default for TtsConfig {
 /// STT configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SttConfig {
-    pub device: SttDevice,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_path: Option<String>,
+    /// Audio inference service URL (e.g., http://127.0.0.1:8002)
+    pub service_url: String,
 }
 
 impl Default for SttConfig {
     fn default() -> Self {
         Self {
-            device: SttDevice::Cpu,
-            model_path: Some("./models/whisper.bin".to_string()),
+            service_url: "http://127.0.0.1:8002".to_string(),
         }
     }
 }
@@ -138,17 +138,6 @@ pub enum TtsProviderKind {
     Qwen,
 }
 
-/// STT device selector.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum SttDevice {
-    #[serde(rename = "cpu")]
-    Cpu,
-    #[serde(rename = "cuda:0")]
-    Cuda0,
-    #[serde(rename = "auto")]
-    Auto,
-}
-
 /// Frontend provider selector.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -166,8 +155,8 @@ pub const VALID_LLM_PROVIDERS: &[LlmProviderKind] = &[
 /// Valid TTS modes.
 pub const VALID_TTS_MODES: &[&str] = &["cpu", "gpu", "auto"];
 
-/// Valid STT devices.
-pub const VALID_STT_DEVICES: &[SttDevice] = &[SttDevice::Cpu, SttDevice::Cuda0, SttDevice::Auto];
+/// Valid STT service URL patterns (must be HTTP/HTTPS).
+pub const VALID_STT_SERVICE_URL_PATTERN: &str = "^https?://.*";
 
 /// Validate runtime config.
 pub fn validate_config(config: &RuntimeConfig) -> Result<(), String> {
@@ -188,5 +177,11 @@ pub fn validate_config(config: &RuntimeConfig) -> Result<(), String> {
     }
 
     // Validate STT
+    if config.stt.service_url.is_empty() {
+        return Err("STT service_url must not be empty".to_string());
+    }
+    if !config.stt.service_url.starts_with("http://") && !config.stt.service_url.starts_with("https://") {
+        return Err("STT service_url must start with http:// or https://".to_string());
+    }
     Ok(())
 }
