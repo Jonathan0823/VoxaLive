@@ -61,7 +61,7 @@ impl Default for TtsConfig {
     fn default() -> Self {
         Self {
             mode: "cpu".to_string(),
-            provider: TtsProviderKind::Piper,
+            provider: TtsProviderKind::Qwen,
             model_path: Some("./voices/default.onnx".to_string()),
             service_url: "http://127.0.0.1:8002".to_string(),
         }

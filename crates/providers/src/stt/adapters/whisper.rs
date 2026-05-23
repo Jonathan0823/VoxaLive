@@ -7,8 +7,9 @@
 use std::sync::OnceLock;
 
 use crate::stt::{SttProvider, SttRequest, SttResponse};
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Handle;
 
 use voxalive_core::domain::CoreError;
 
@@ -53,7 +54,6 @@ impl WhisperAdapter {
 
 impl SttProvider for WhisperAdapter {
     fn transcribe(&self, request: SttRequest) -> Result<SttResponse, CoreError> {
-        // Encode audio as base64
         let audio_data = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
             &request.audio_bytes,
@@ -67,25 +67,41 @@ impl SttProvider for WhisperAdapter {
             audio_data,
         };
 
-        // Make synchronous HTTP call to external service
-        let response = http_client()
-            .post(&format!("{}/stt/transcribe", self.service_url))
-            .json(&req)
-            .send()
-            .map_err(|e| Self::map_error(format!("Failed to call STT service: {}", e)))?;
+        let service_url = self.service_url.clone();
 
-        if !response.status().is_success() {
-            return Err(Self::map_error(format!(
-                "STT service returned error: {}",
-                response.status()
-            )));
-        }
+        tokio::task::block_in_place(|| {
+            Handle::current().block_on(async move {
+                let response = http_client()
+                    .post(&format!("{}/stt/transcribe", service_url))
+                    .json(&req)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        CoreError::new(
+                            "STT_SERVICE_ERROR",
+                            format!("Failed to call STT service: {}", e),
+                        )
+                    })?;
 
-        let result: TranscribeResponse = response
-            .json()
-            .map_err(|e| Self::map_error(format!("Failed to parse STT response: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(CoreError::new(
+                        "STT_SERVICE_ERROR",
+                        format!("STT service returned error: {}", response.status()),
+                    ));
+                }
 
-        Ok(SttResponse { transcript: result.transcript })
+                let result: TranscribeResponse = response.json().await.map_err(|e| {
+                    CoreError::new(
+                        "STT_SERVICE_ERROR",
+                        format!("Failed to parse STT response: {}", e),
+                    )
+                })?;
+
+                Ok(SttResponse {
+                    transcript: result.transcript,
+                })
+            })
+        })
     }
 }
 

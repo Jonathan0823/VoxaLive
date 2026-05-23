@@ -1,8 +1,9 @@
 use std::sync::OnceLock;
 
 use crate::tts::{TtsProvider, TtsRequest, TtsResponse};
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Handle;
 use voxalive_core::domain::CoreError;
 
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
@@ -51,31 +52,54 @@ impl TtsProvider for AudioServiceTtsAdapter {
             format: "wav".to_string(),
         };
 
-        let response = http_client()
-            .post(&format!("{}/tts/synthesize", self.service_url))
-            .json(&req)
-            .send()
-            .map_err(|e| Self::map_error(format!("Failed to call TTS service: {}", e)))?;
+        let service_url = self.service_url.clone();
 
-        if !response.status().is_success() {
-            return Err(Self::map_error(format!(
-                "TTS service returned error: {}",
-                response.status()
-            )));
-        }
+        tokio::task::block_in_place(|| {
+            Handle::current().block_on(async move {
+                let response = http_client()
+                    .post(&format!("{}/tts/synthesize", service_url))
+                    .json(&req)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        CoreError::new(
+                            "TTS_SERVICE_ERROR",
+                            format!("Failed to call TTS service: {}", e),
+                        )
+                    })?;
 
-        let result: SynthesizeResponse = response
-            .json()
-            .map_err(|e| Self::map_error(format!("Failed to parse TTS response: {}", e)))?;
+                if !response.status().is_success() {
+                    return Err(CoreError::new(
+                        "TTS_SERVICE_ERROR",
+                        format!("TTS service returned error: {}", response.status()),
+                    ));
+                }
 
-        use base64::Engine;
-        let audio_bytes = base64::engine::general_purpose::STANDARD
-            .decode(&result.audio_data)
-            .map_err(|e| Self::map_error(format!("Failed to decode audio: {}", e)))?;
+                let result: SynthesizeResponse = response
+                    .json()
+                    .await
+                    .map_err(|e| {
+                        CoreError::new(
+                            "TTS_SERVICE_ERROR",
+                            format!("Failed to parse TTS response: {}", e),
+                        )
+                    })?;
 
-        Ok(TtsResponse {
-            audio_format: result.format,
-            audio_bytes,
+                use base64::Engine;
+                let audio_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&result.audio_data)
+                    .map_err(|e| {
+                        CoreError::new(
+                            "TTS_SERVICE_ERROR",
+                            format!("Failed to decode audio: {}", e),
+                        )
+                    })?;
+
+                Ok(TtsResponse {
+                    audio_format: result.format,
+                    audio_bytes,
+                })
+            })
         })
     }
 }
