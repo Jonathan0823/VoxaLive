@@ -201,12 +201,12 @@ flowchart TD
     ProviderKind --> OpenRouter[OpenRouter]
     ProviderKind --> Ollama[Ollama]
     ProviderKind --> Piper[Piper]
-    ProviderKind --> Qwen[Qwen]
+    ProviderKind --> AudioService[Audio Inference]
     Gemini --> Active[Set Active Provider]
     OpenRouter --> Active
     Ollama --> Active
     Piper --> Active
-    Qwen --> Active
+    AudioService --> Active
 ~~~
 
 ## Example .env
@@ -249,8 +249,7 @@ SECRETS_FILE=data/secrets.enc
     "model_path": "./voices/default.onnx"
   },
   "stt": {
-    "device": "cpu",
-    "model_path": "./models/whisper.bin"
+    "service_url": "http://127.0.0.1:8002"
   },
   "live": {
     "enabled": false,
@@ -277,9 +276,9 @@ SECRETS_FILE=data/secrets.enc
 
 ### STT
 
-- device must be one of: `cpu`, `cuda:0`, `auto`
-- model_path should point to a Whisper `.bin` model file
-- larger models improve Indonesian recognition; tiny models may be inaccurate for non-English speech
+- service_url must be a valid HTTP/HTTPS URL
+- The audio-inference service must be running at the specified URL
+- Default: `http://127.0.0.1:8002`
 
 ### Live Inputs
 

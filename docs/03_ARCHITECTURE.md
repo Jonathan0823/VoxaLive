@@ -26,9 +26,11 @@ flowchart TB
     Backend --> Gemini[Gemini]
     Backend --> OpenRouter[OpenRouter]
     Backend --> Ollama[Ollama]
-    Backend --> Whisper[faster-whisper]
-    Backend --> Qwen[Qwen TTS]
+    Backend --> AudioInf[Audio Inference]
     Backend --> Piper[Piper TTS]
+
+    AudioInf --> Whisper[Whisper STT]
+    AudioInf --> Qwen[Qwen TTS]
 
     Backend --> VTS[VTube Studio]
 ~~~
@@ -49,10 +51,14 @@ flowchart LR
     Worker --> TTS[TTS Port]
     Worker --> Frontend[Frontend Adapter Port]
 
-    STT --> STTAdapter[Whisper Adapter]
+    STT --> STTAdapter[Whisper HTTP Client]
     LLM --> LLMAdapters[Gemini / OpenRouter / Ollama]
-    TTS --> TTSAdapters[Qwen / Piper]
+    TTS --> TTSAdapters[Piper]
+    TTS --> TTSHTTP[Qwen HTTP Client]
     Frontend --> OutputAdapters[Raw / VTS / Web3D]
+
+    STT -.-> AudioService[Audio Inference Service]
+    TTSHTTP -.-> AudioService
 ~~~
 
 ## Admin Control Plane
