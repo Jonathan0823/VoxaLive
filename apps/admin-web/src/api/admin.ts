@@ -30,11 +30,11 @@ export interface TtsConfig {
   mode: string;
   provider: string;
   model_path?: string;
+  service_url: string;
 }
 
 export interface SttConfig {
-  device: string;
-  model_path?: string;
+  service_url: string;
 }
 
 export interface LiveConfig {

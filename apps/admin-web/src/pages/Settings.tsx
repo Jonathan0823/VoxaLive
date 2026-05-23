@@ -8,8 +8,7 @@ const Settings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [vtsEndpoint, setVtsEndpoint] = useState("");
-  const [sttDevice, setSttDevice] = useState("cpu");
-  const [sttModelPath, setSttModelPath] = useState("./models/whisper.bin");
+  const [sttServiceUrl, setSttServiceUrl] = useState("http://127.0.0.1:8002");
 
   useEffect(() => {
     let cancelled = false;
@@ -17,8 +16,7 @@ const Settings: React.FC = () => {
       .then((data) => {
         if (!cancelled) {
           setVtsEndpoint(data.server.vts_endpoint);
-          setSttDevice(data.stt.device);
-          setSttModelPath(data.stt.model_path ?? "./models/whisper.bin");
+          setSttServiceUrl(data.stt.service_url ?? "http://127.0.0.1:8002");
           setLoading(false);
         }
       })
@@ -43,11 +41,10 @@ const Settings: React.FC = () => {
 
     try {
       const patch: ServerPatchConfig = { vts_endpoint: vtsEndpoint };
-      const sttPatch: SttConfig = { device: sttDevice, model_path: sttModelPath };
+      const sttPatch: SttConfig = { service_url: sttServiceUrl };
       const data = await patchConfig({ server: patch, stt: sttPatch });
       setVtsEndpoint(data.server.vts_endpoint);
-      setSttDevice(data.stt.device);
-      setSttModelPath(data.stt.model_path ?? "./models/whisper.bin");
+      setSttServiceUrl(data.stt.service_url ?? "http://127.0.0.1:8002");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -101,38 +98,19 @@ const Settings: React.FC = () => {
           <h2 className="text-lg font-medium text-gray-900 mb-4">STT Settings</h2>
           <div className="space-y-4">
             <div>
-              <label htmlFor="stt_device" className="block text-sm font-medium text-gray-700 mb-1">
-                STT Device
-              </label>
-              <select
-                id="stt_device"
-                value={sttDevice}
-                onChange={(e) => setSttDevice(e.target.value)}
-                className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="cpu">CPU</option>
-                <option value="cuda:0">CUDA 0</option>
-                <option value="auto">Auto</option>
-              </select>
-              <p className="mt-1 text-sm text-gray-500">
-                Device used by Whisper during transcription.
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="stt_model_path" className="block text-sm font-medium text-gray-700 mb-1">
-                Whisper Model Path
+              <label htmlFor="stt_service_url" className="block text-sm font-medium text-gray-700 mb-1">
+                Audio Inference Service URL
               </label>
               <input
                 type="text"
-                id="stt_model_path"
-                value={sttModelPath}
-                onChange={(e) => setSttModelPath(e.target.value)}
+                id="stt_service_url"
+                value={sttServiceUrl}
+                onChange={(e) => setSttServiceUrl(e.target.value)}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="./models/whisper.bin"
+                placeholder="http://127.0.0.1:8002"
               />
               <p className="mt-1 text-sm text-gray-500">
-                Use a larger Whisper model for better Indonesian support (for example, base or small).
+                URL of the audio-inference service that runs Whisper STT.
               </p>
             </div>
           </div>
