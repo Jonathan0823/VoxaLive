@@ -7,7 +7,7 @@ use axum::{
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use voxalive_config::models::{LlmProviderKind, SttDevice, TtsProviderKind};
+use voxalive_config::models::{LlmProviderKind, TtsProviderKind};
 use voxalive_protocol::api::{
     ApiResponse, ConfigData, ConfigPatchRequest, ConfigResponse,
 };
@@ -72,23 +72,29 @@ pub async fn update_config(
             }
         };
         runtime.tts.model_path = tts.model_path;
+        runtime.tts.service_url = tts.service_url;
     }
     if let Some(stt) = patch.stt {
-        runtime.stt.device = match stt.device.as_str() {
-            "cpu" => SttDevice::Cpu,
-            "cuda:0" => SttDevice::Cuda0,
-            "auto" => SttDevice::Auto,
-            _ => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiResponse::error(
-                        "CONFIG_VALIDATION_FAILED",
-                        "Invalid STT device",
-                    )),
-                )
-            }
-        };
-        runtime.stt.model_path = stt.model_path;
+        let service_url = stt.service_url;
+        if service_url.is_empty() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error(
+                    "CONFIG_VALIDATION_FAILED",
+                    "STT service_url must not be empty",
+                )),
+            );
+        }
+        if !service_url.starts_with("http://") && !service_url.starts_with("https://") {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error(
+                    "CONFIG_VALIDATION_FAILED",
+                    "STT service_url must start with http:// or https://",
+                )),
+            );
+        }
+        runtime.stt.service_url = service_url;
     }
     if let Some(live) = patch.live {
         runtime.live.enabled = live.enabled;
